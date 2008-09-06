@@ -46,8 +46,6 @@ class YotsubaSDKPackage:
 			return rstring
 			
 	class fs:
-		version = 2
-		
 		# Make directory
 		def mkdir(self, destpath):
 			try:
@@ -155,7 +153,7 @@ class YotsubaSDKPackage:
 			return data
 		
 		# Web Data Fetching Function
-		def web_read(self, url):
+		def read_web(self, url):
 			try:
 				import pycurl
 				rp = pycurl.Curl()
@@ -205,7 +203,6 @@ class YotsubaSDKPackage:
 		
 		Content intepretation and log-base processing package
 		"""
-		version = 4
 		
 		# Add slashes to the given string
 		def addslashes(self, string):
@@ -228,8 +225,6 @@ class YotsubaSDKPackage:
 			return content
 		
 	class mail:
-		version = 2
-		
 		DEFAULT_MESSAGE_SUBJECT = 'Untitled Message'
 		re_valid_email_Address = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
 		
