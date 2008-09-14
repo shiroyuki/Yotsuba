@@ -20,11 +20,11 @@ WRITE_NORMAL	= 'w'
 WRITE_BINARY	= 'wb'
 WRITE_PICKLE	= 'pickle::write'
 
+global config
 config = {}
 
-class YotsubaSDKPackage:
-
-	class core:
+class YotsubaCorePackage:
+	class base:
 		name = 'Yotsuba SDK'
 		version = 2.0
 
@@ -53,16 +53,84 @@ class YotsubaSDKPackage:
 					#YotsubaSDKPackage.fs.read(source)
 				else:
 					config[source] = value
+	class log:
+		# Local configuration
+		maxAllowedLevel = 2
+		# Definitions
+		noticeLevel = 0
+		warningLevel = 1
+		errorLevel = 2
+		# Storage
+		logs = []
+		
+		def report(self, content, level = 0):
+			self.logs.append(self.logObject(content, level))
+		def export(self, level = -1, onlyOneLevel = False, toArray = False):
+			"""
+			Export logs as a hash table
+			"""
+			table = []
+			for log in self.logs:
+				if log.level < level:
+					continue
+				textMessage = ''
+				if log.level == self.noticeLevel:
+					textMessage = 'Note'
+				elif log.level == self.warningLevel:
+					textMessage = 'Warn'
+				elif log.level == self.errorLevel:
+					textMessage = 'Error'
+				else:
+					textMessage = 'Alert'
+				textMessage += ':\t' + log.content
+			return 
+		class logObject:
+			"""
+			The object class of log message
+			"""
+			# 0: Notification (Default)
+			# 1: Warning
+			# 2: Error
+			
+			content = ''
+			level = 0
+			time = None
+			def __init__(self, content, level = 0):
+				self.content = content
+				self.level = level
 
-	class xmlReader:
+class YotsubaSDKPackage:
+	class time:
 		"""
-		This function is a breakthrough of XML parsers in Python using
-		CSS3-selector method, instead of XPath.
+		This package is the simple version of the time object in Python.
+		"""
+		def getTimeCodeInteger(self, timeObject = None):
+			from time import gmtime, strftime
+			if not timeObject:
+				timeObject = gmtime()
+			return int(strftime("%Y%m%d%H%M", timeObject))
+		
+		def readTimeCode(self, timeCode):
+			result = [0, 0, 0, 0, 0]
+			try:
+				for i in range(5):
+					result[i] = int(timecode/pow(10, 8 - 2*i))
+					result.append(str(result[i]))
+					red_timecode = int(result[i]*pow(10, 8 - 2*i))
+					timecode -= red_timecode
+			except:
+				core.log.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', core.log.errorLevel)
+			return result
+	
+	class xml:
+		"""
+		This package is a breakthrough of XML parsers in Python using
+		basic CSS3-selector method, instead of XPath.
 		"""
 
 		trees = {}
 
-		def load(self, name = None, source = None):
+		def read(self, name = None, source = None):
 			if not name or not source:
 				return False
 			tree = None
@@ -77,6 +145,7 @@ class YotsubaSDKPackage:
 					del trees[name]
 				trees[name] = tree
 			except:
+				core.log.report('[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string.', core.log.errorLevel)
 				return False
 			del treeOrg
 			return True
@@ -189,35 +258,6 @@ class YotsubaSDKPackage:
 			for loopindex in range(0, self.cryptographic_depth_level):
 				rstring = base64.b64decode(rstring)
 			return rstring
-
-	class ec:
-		"""
-		Environment Controller
-		"""
-
-		headers = {
-			'Content-Type': DEFAULT_CONTENT_TYPE
-		}
-
-		# Cookies
-
-		cookies = Cookie.SimpleCookie()
-
-		def cookie(self, key = None, newValue = ''):
-			if not key:
-				return ''
-			if newValue == '':
-				cookies[key] = newValue
-			return cookies[key].value
-
-		def cookies_to_string(self):
-			return cookies.output()
-
-		# Sessions
-
-		def session(self):
-			pass
-
 
 	class fs:
 		# Make directory
@@ -448,11 +488,68 @@ class YotsubaSDKPackage:
 				if data['from'] == '' or data['to'] == '':
 					return False
 
+class YotsubaFWPackage:
+	class ec:
+		"""
+		Environment Controller
+		"""
+
+		headers = {
+			'Content-Type': DEFAULT_CONTENT_TYPE
+		}
+
+		# Cookies
+
+		cookies = Cookie.SimpleCookie()
+
+		def cookie(self, key = None, newValue = ''):
+			if not key:
+				return ''
+			if newValue == '':
+				cookies[key] = newValue
+			return cookies[key].value
+
+		def cookies_to_string(self):
+			return cookies.output()
+
+		# Sessions
+		
+		session_path = ''
+		session_data = None
+
+		def session(self, key, newValue = None):
+			if not self.session_data:
+				if not self.session_path == '':
+					self.session_path = DEFAULT_PATH_TO_SESSION_STORAGE
+				if not sdk.fs.exists(self.sessions_path):
+					if sdk.fs.mkdir(self.session_path):
+						
+						pass
+					else:
+						session_status_add("Error occurred during reinitiation.")
+				else:
+					session_status_add("Reconnected to the EC server.")
+	class ui:
+		"""
+		User Interface Package
+		"""
+		
+		encoding = 'utf-8'
+		tags = {}
+
+class YotsubaCore:
+	base = YotsubaCorePackage.base()
+	log = YotsubaCorePackage.log()
+
 class YotsubaSDK:
-	core = YotsubaSDKPackage.core()
 	crypt = YotsubaSDKPackage.crypt()
 	fs = YotsubaSDKPackage.fs()
 	log = YotsubaSDKPackage.log()
 	mail = YotsubaSDKPackage.mail()
 
+class YotsubaFW:
+	ec = YotsubaFWPackage.ec()
+
+core = YotsubaCore()
 sdk = YotsubaSDK()
+fw = YotsubaFW()
