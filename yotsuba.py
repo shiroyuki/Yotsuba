@@ -7,7 +7,7 @@ import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, C
 
 # SDK.EC > Default Configuration
 DEFAULT_CONTENT_TYPE = 'text/html'
-DEFAULT_PATH_TO_SESSION_STORAGE = 'sessions'
+DEFAULT_PATH_TO_SESSION_STORAGE = 'sessions/'
 
 # SDK.FS > Common Definitions
 FILE		= 0
@@ -20,6 +20,9 @@ WRITE_NORMAL	= 'w'
 WRITE_BINARY	= 'wb'
 WRITE_PICKLE	= 'pickle::write'
 
+global core
+global sdk
+global fw
 global config
 config = {}
 
@@ -502,33 +505,107 @@ class YotsubaFWPackage:
 
 		cookies = Cookie.SimpleCookie()
 
-		def cookie(self, key = None, newValue = ''):
-			if not key:
-				return ''
+		def cookie(self, key, newValue = ''):
 			if newValue == '':
 				cookies[key] = newValue
 			return cookies[key].value
 
-		def cookies_to_string(self):
+		def printCookie(self):
 			return cookies.output()
 
 		# Sessions
-		
-		session_path = ''
-		session_data = None
+
+		session = None
+		sessionPath = ''
 
 		def session(self, key, newValue = None):
-			if not self.session_data:
-				if not self.session_path == '':
-					self.session_path = DEFAULT_PATH_TO_SESSION_STORAGE
-				if not sdk.fs.exists(self.sessions_path):
-					if sdk.fs.mkdir(self.session_path):
-						
-						pass
-					else:
-						session_status_add("Error occurred during reinitiation.")
+			# Initialization
+			localRenewSession = False
+			# If the session data is not initialized, then the initialization will
+			# be preceeded first by default.
+			if not self.session:
+				self.session = self.sessionObject()
+				core.log.report("[fw.ec.session] Initialized the session information")
+				sid = self.cookie('sid')
+				locationToLoad = sdk.fs.abspath(self.sessionPath + '/' + sid, True)
+				if sid and sdk.fs.exists(locationToLoad):
+					try:
+						self.session = sdk.fs.read(locationToLoad, READ_PICKLE)
+						if self.session:
+							core.log.report("[fw.ex.session] Session '%s' restored" % sid)
+						else:
+							localRenewSession = True
+							core.log.report("[fw.ex.session] Session '%s' failed to be restored" % sid, core.log.warningLevel)
+					except:
+						localRenewSession = True
+						core.log.report("[fw.ex.session] Session '%s' failed to be restored as sdk.fs threw exception." % sid, core.log.errorLevel)
 				else:
-					session_status_add("Reconnected to the EC server.")
+					sid = hashlib.new(str(time.time())).hexdigest()
+					self.session.id = sid
+				self.cookie('sid', sid)
+			# Then, load or change the data.
+			if not self.session.data.has_key(key) and not newValue:
+				core.log.report("[fw.ec.session] No session variable '%s' found" % key, core.log.warningLevel)
+			if not newValue == None:
+				session.data[key] = newValue
+				core.log.report("[fw.ec.session] Session variable '%s' updated" % key)
+			# Save only if there is update
+			if not newValue == None:
+				if self.sessionSave():
+					core.log.report("[fw.ec.session] Session variable '%s' stored" % key)
+					return self.session.data[key]
+				else:
+					core.log.report("[fw.ec.session] Session variable '%s' not stored" % key, core.log.warningLevel)
+					return None
+			if self.session.data.has_key(key):
+				core.log.report("[fw.ec.session] Session variable '%s' accessed" % key)
+				return self.session.data[key]
+			core.log.report("[fw.ec.session] Session variable '%s' not found" % key)
+			return None
+
+		def sessionSave(self):
+			# Look for session ID
+			if not self.session:
+				core.log.report("[fw.ec.sessionSave] The session identifier is invalid.", core.log.errorLevel)
+				return False
+			# Look for the configuration for the session storage
+			if not self.sessionPath == '':
+				self.sessionPath = DEFAULT_PATH_TO_SESSION_STORAGE
+			# Look for the session storage
+			# CASE: Cannot find the session storage.
+			if not sdk.fs.exists(self.sessionsPath):
+				core.log.report("[fw.ec.sessionSave] The session storage does not exist.", core.log.warningLevel)
+				if sdk.fs.mkdir(self.sessionPath):
+					core.log.report("[fw.ec.sessionSave] The session storage is initialized.")
+					if sdk.fs.writable(self.sessionPath):
+						core.log.report("[fw.ec.sessionSave] The session storage is confirmed to be accessible.")
+				else:
+					core.log.report("[fw.ec.sessionSave] The creation of the session storage is not permitted.", core.log.errorLevel)
+			# CASE: The session storage is found.
+			else:
+				core.log.report("[fw.ec.sessionSave] Found the session storage")
+			# Prepare the path of the session storage for this session
+			locationToSave = sdk.fs.abspath(self.sessionPath + '/' + self.session.id, True)
+			# Locate the existed information of this session
+			if not sdk.fs.exists(locationToSave):
+				core.log.report("[fw.ec.sessionSave] Session ID '%s' does not exists but it will be automatically generated." % self.session.id, core.log.warningLevel)
+			# Test writing
+			if not sdk.fs.writable(locationToSave):
+				core.log.report("[fw.ec.sessionSave] Session ID '%s' is not saved as backing up this session is not permitted." % self.session.id, core.log.warningLevel)
+				return False
+			# Backup
+			if not sdk.fs.write(locationToSave, self.session.data, WRITE_PICKLE):
+				core.log.report("[fw.ec.sessionSave] Session '%s' is not saved as the result of failed backup." % self.session.id, core.log.errorLevel)
+				return False
+			return True
+
+		class sessionObject:
+			id = None
+			data = {}
+
+			def __init__(self, id):
+				self.id = id
+
 	class ui:
 		"""
 		User Interface Package
