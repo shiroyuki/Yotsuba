@@ -6,7 +6,7 @@
 import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, Cookie, xml.dom.minidom
 
 # SDK.EC > Default Configuration
-DEFAULT_CONTENT_TYPE = 'text/html'
+DEFAULT_CONTENT_TYPE = 'text/html;charset=UTF-8'
 DEFAULT_PATH_TO_SESSION_STORAGE = 'sessions/'
 
 # SDK.FS > Common Definitions
@@ -25,6 +25,10 @@ global sdk
 global fw
 global config
 config = {}
+
+class YotsubaUnitTestPackage:
+	def __init__(self):
+		core.log.report("Begin testing")
 
 class YotsubaCorePackage:
 	class base:
@@ -86,7 +90,8 @@ class YotsubaCorePackage:
 				else:
 					textMessage = 'Alert'
 				textMessage += ':\t' + log.content
-			return 
+				table.append(textMessage)
+			return '\n'.join(table)
 		class logObject:
 			"""
 			The object class of log message
@@ -496,28 +501,40 @@ class YotsubaFWPackage:
 		"""
 		Environment Controller
 		"""
-
+		
 		headers = {
 			'Content-Type': DEFAULT_CONTENT_TYPE
 		}
-
-		# Cookies
-
 		cookies = Cookie.SimpleCookie()
-
+		session = None
+		sessionPath = ''
+		
+		def header(self, key = None, value = None, selfPrint = False):
+			if key:
+				try:
+					if value and type(x) == str:
+						self.headers[key] = value
+					return self.headers[key]
+				except:
+					core.log.report("[fw.ec.header] failed to retrieve a value of header %s" % key, core.log.warningLevel)
+			else:
+				lines = []
+				for k, v in headers.iteritems():
+					lines.append('%s: %s' % (k, v))
+				result = '%s\n%s\n\n' % ('\n'.join(lines), self.printCookie())
+				if selfPrint:
+					print result
+				return result
+		# Cookies
 		def cookie(self, key, newValue = ''):
 			if newValue == '':
 				cookies[key] = newValue
 			return cookies[key].value
-
+		
 		def printCookie(self):
 			return cookies.output()
-
+		
 		# Sessions
-
-		session = None
-		sessionPath = ''
-
 		def session(self, key, newValue = None):
 			# Initialization
 			localRenewSession = False
@@ -602,10 +619,10 @@ class YotsubaFWPackage:
 		class sessionObject:
 			id = None
 			data = {}
-
+			
 			def __init__(self, id):
 				self.id = id
-
+				
 	class ui:
 		"""
 		User Interface Package
