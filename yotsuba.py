@@ -1,9 +1,11 @@
 #!/usr/bin/python
 # Yotsuba SDK and Framework
+# Version 2.0 (Developmental)
 # (C) 2007 Juti Noppornpitak <juti_n@yahoo.co.jp>
 # LGPL License
 
 import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, Cookie, xml.dom.minidom
+import xml.etree.ElementTree as ETAPI
 
 # SDK.EC > Default Configuration
 DEFAULT_CONTENT_TYPE = 'text/html;charset=UTF-8'
@@ -133,14 +135,72 @@ class YotsubaSDKPackage:
 	class xml:
 		"""
 		This package is a breakthrough of XML parsers in Python using
-		basic CSS3-selector method, instead of XPath.
+		basic CSS3-selector method, instead of XPath. The rules is based on jQuery API
+		
+		This function is still based on ElementTree API in order to reduce
+		the additional footprint.
 		"""
-
+		rule_heirarchy = ' '
+		rule_matchNextLevel = '>'
+		rule_matchOneNextSibling = '+'
+		rule_matchAllNextSiblings = '~'
+		files = {}
+		
+		def test(self, filename):
+			print sdk.fs.read('xml-test-1.xml');
+		
+		def query(self, selector, source):
+			# Checks type of both `selector` and `source` (expected: str)
+			if not (type(selector) == str and type(source) == str):
+				return []
+			# Initializes local variables
+			resultElements = []
+			resultElement = None
+			data = ''
+			groups = selector.split(",")
+			# Prepares data
+			if sdk.fs.exists(source) and not self.files.has_key(source):
+				data = sdk.fs.read(source)
+				self.files[source] = sdk.fs.read(source)
+			else:
+				data = source
+			# Iterates the dom tree
+			for group in groups:
+				resultElement = self.queryPerGroup(group, data)
+				if resultElement and type(resultElement) == list and len(resultElement) > 0:
+					resultElement.append(resultElement)
+			# Frees memory
+			del self.files[source]
+			# Returns result
+			return resultElement
+		
+		def queryPerGroup(self, selector, data):
+			selector = selector.strip()
+			if re.match("^(>|\+|~)", selector) or  re.match("(>|\+|~)$", selector):
+				return None
+			order = re.split("( |\t)+", selector)
+			return self.traverse(order, 0, data)
+		
+		# Unfinished
+		def traverse(self, order, depth, data, rule = None):
+			if not rule:
+				rule = self.rule_heirarchy
+			pass
+	
+	class xmlPrototype:
+		"""
+		This package is a breakthrough of XML parsers in Python using
+		basic CSS3-selector method, instead of XPath.
+		
+		This is a prototype.
+		"""
+		
 		trees = {}
-
-		def read(self, name = None, source = None):
-			if not name or not source:
-				return False
+		
+		def read(self, treeName, source):
+			"""
+			Read either a string or a file in the XML format and save.
+			"""
 			tree = None
 			treeOrg = None
 			try:
@@ -149,18 +209,18 @@ class YotsubaSDKPackage:
 				else:
 					treeOrg = xml.dom.minidom.parseString(source)
 				tree = self.buildTreeOnTheFly(treeOrg)
-				if trees.hasKey(name):
-					del trees[name]
-				trees[name] = tree
+				if trees.hasKey(treeName):
+					del trees[treeName]
+				trees[treeName] = tree
 			except:
 				core.log.report('[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string.', core.log.errorLevel)
 				return False
 			del treeOrg
 			return True
-
-		def query(self, treeName = None, selector = None):
-			if not treeName or not selector:
-				# return nothing if there is either no treeName or no selector
+		
+		def query(self, treeName, selector, useXPath = True):
+			if not type(treeName) == str or not type(selector) == str:
+				# return nothing if either no treeName or no selector is not a string
 				return []
 			if not trees.hasKey(treeName):
 				# return nothing if there is not a tree called by treeName
@@ -174,7 +234,7 @@ class YotsubaSDKPackage:
 			selectorPointer = selectorList[0]
 			resultList = []
 			resultList.extend(traverse(trees[treeName], selectorList))
-
+		
 		def traverse(self, node, selector, selectorLevel, includeRootNode = True):
 			try:
 				resultList = []
@@ -627,9 +687,65 @@ class YotsubaFWPackage:
 		"""
 		User Interface Package
 		"""
-		
 		encoding = 'utf-8'
+		tagPrefix = ''
 		tags = {}
+		
+		def __init__(self, tagPrefix = ''):
+			self.tagPrefix = tagPrefix
+		
+		def loadTagLibrary(self, XMLFilename):
+			self.tags = sdk.xml.query('TagLibrary > Tag', XMLFilename)
+		
+		def tag(self, key, newValue = None):
+			if not self.tags.has_key(key) and not newValue == None:
+				return ''
+			if not newValue == None:
+				self.tags[key] = '%s' % newValue
+			return self.tags[key]
+		
+		def translate(self, template):
+			if not type(template) == str:
+				return ''
+			if sdk.fs.exists(template):
+				template = sdk.fs.read(template)
+			for tagKey, tagValue in tags:
+				re.sub("<%s%s/>" % (self.tagPrefix, tagKey), self.tagValue, template)
+			return template
+	
+	class url:
+		"""
+		URL Creation Package
+		"""
+		minimumLengthOfQueryString = 3
+		
+		def buildQueryString(self, queryHash = None):
+			if not queryHash:
+				return ''
+			if len(queryHash.keys()) <= 0:
+				return ''
+			resultString = []
+			for queryKey, queryValue in queryHash:
+				if queryKey == '' or queryValue == '':
+					core.log.report('Empty query key or value is used in fw.url.buildQieryString', core.log.warningLevel)
+					continue
+				resultString.append('%s=%s' % (queryKey, queryValue))
+			return '&'.join(resultString)
+		
+		def buildURL(self, destination, queryHash = None, port = None):
+			queryString = self.buildQueryString(queryHash)
+			resultURL = destination
+			if not re.match(".+\://.+", destination):
+				resultURL += 'http://' + destination
+			if port and type(port) == int:
+				if re.match("\?", resultURL):
+					resultURLCom = re.split('\?', resultURL, 1)
+					resultURL += '%s:%d?%s' % (resultURLCom[0], port, resultURLCom[1])
+				else:
+					resultURL += ':%d' % port
+			if queryString and len(queryString) >= self.minimumLengthOfQueryString:
+				resultURL += '?%s' % queryString
+			return resultURL
 
 class YotsubaCore:
 	base = YotsubaCorePackage.base()
@@ -640,6 +756,8 @@ class YotsubaSDK:
 	fs = YotsubaSDKPackage.fs()
 	log = YotsubaSDKPackage.log()
 	mail = YotsubaSDKPackage.mail()
+	time = YotsubaSDKPackage.time()
+	xml = YotsubaSDKPackage.xml()
 
 class YotsubaFW:
 	ec = YotsubaFWPackage.ec()
