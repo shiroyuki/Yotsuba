@@ -5,7 +5,7 @@
 # LGPL License
 
 import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, Cookie, xml.dom.minidom
-import xml.etree.ElementTree as ETAPI
+import xml.etree.ElementTree as ET
 
 # SDK.EC > Default Configuration
 DEFAULT_CONTENT_TYPE = 'text/html;charset=UTF-8'
@@ -27,10 +27,6 @@ global sdk
 global fw
 global config
 config = {}
-
-class YotsubaUnitTestPackage:
-	def __init__(self):
-		core.log.report("Begin testing")
 
 class YotsubaCorePackage:
 	class base:
@@ -69,6 +65,7 @@ class YotsubaCorePackage:
 		noticeLevel = 0
 		warningLevel = 1
 		errorLevel = 2
+		codeWatchLevel = 3
 		# Storage
 		logs = []
 		
@@ -89,6 +86,8 @@ class YotsubaCorePackage:
 					textMessage = 'Warn'
 				elif log.level == self.errorLevel:
 					textMessage = 'Error'
+				elif log.level == self.codeWatchLevel:
+					textMessage = 'Watch'
 				else:
 					textMessage = 'Alert'
 				textMessage += ':\t' + log.content
@@ -132,7 +131,7 @@ class YotsubaSDKPackage:
 				core.log.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', core.log.errorLevel)
 			return result
 	
-	class xml:
+	class xmlPrototype:
 		"""
 		This package is a breakthrough of XML parsers in Python using
 		basic CSS3-selector method, instead of XPath. The rules is based on jQuery API
@@ -144,7 +143,12 @@ class YotsubaSDKPackage:
 		rule_matchNextLevel = '>'
 		rule_matchOneNextSibling = '+'
 		rule_matchAllNextSiblings = '~'
-		files = {}
+		specialRules = [
+			rule_matchNextLevel,
+			rule_matchOneNextSibling,
+			rule_matchAllNextSiblings
+		]
+		trees = {}
 		
 		def test(self, filename):
 			print sdk.fs.read('xml-test-1.xml');
@@ -156,45 +160,60 @@ class YotsubaSDKPackage:
 			# Initializes local variables
 			resultElements = []
 			resultElement = None
-			data = ''
 			groups = selector.split(",")
 			# Prepares data
 			if sdk.fs.exists(source) and not self.files.has_key(source):
-				data = sdk.fs.read(source)
-				self.files[source] = sdk.fs.read(source)
+				self.trees[source] = ET.parse(source)
 			else:
-				data = source
+				self.trees[source] = ET.fromstring(source)
 			# Iterates the dom tree
 			for group in groups:
-				resultElement = self.queryPerGroup(group, data)
+				resultElement = self.queryPerGroup(group, source)
 				if resultElement and type(resultElement) == list and len(resultElement) > 0:
 					resultElement.append(resultElement)
 			# Frees memory
-			del self.files[source]
+			del self.trees[source]
 			# Returns result
 			return resultElement
 		
-		def queryPerGroup(self, selector, data):
+		def queryPerGroup(self, selector, referrer):
 			selector = selector.strip()
 			if re.match("^(>|\+|~)", selector) or  re.match("(>|\+|~)$", selector):
 				return None
 			order = re.split("( |\t)+", selector)
-			return self.traverse(order, 0, data)
+			return self.traverse(order, 0, referrer)
 		
 		# Unfinished
-		def traverse(self, order, depth, data, rule = None):
+		def traverse(self, order, depth, referrer, path = [], rule = None):
+			# Set the rule
 			if not rule:
 				rule = self.rule_heirarchy
+			if order[depth].strip() in self.specialRules:
+				rule = order[depth]
+				depth += 1
+			# Set the path
+			if not path:
+				path.append(order[depth])
+			nodes = self.trees[referrer].findall('/'.join(path))
+			# Check the result
 			pass
 	
-	class xmlPrototype:
+	class xml:
 		"""
 		This package is a breakthrough of XML parsers in Python using
 		basic CSS3-selector method, instead of XPath.
 		
 		This is a prototype.
 		"""
-		
+		rule_heirarchy = ' '
+		rule_directDescendant = '>'
+		rule_matchOneNextSibling = '+'
+		rule_matchAllNextSiblings = '~'
+		specialRules = [
+			rule_directDescendant,
+			rule_matchOneNextSibling,
+			rule_matchAllNextSiblings
+		]
 		trees = {}
 		
 		def read(self, treeName, source):
@@ -203,106 +222,247 @@ class YotsubaSDKPackage:
 			"""
 			tree = None
 			treeOrg = None
+			core.log.report('sdk.xml.read')
 			try:
-				if YotsubaSDKPackage.fs.exists(source):
+				if sdk.fs.exists(source):
 					treeOrg = xml.dom.minidom.parse(source)
 				else:
 					treeOrg = xml.dom.minidom.parseString(source)
-				tree = self.buildTreeOnTheFly(treeOrg)
-				if trees.hasKey(treeName):
-					del trees[treeName]
-				trees[treeName] = tree
 			except:
-				core.log.report('[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string.', core.log.errorLevel)
+				core.log.report(
+					'[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
+					sys.exc_info()[0],
+					core.log.errorLevel
+				)
+				return False
+			try:
+				for node in treeOrg.childNodes:
+					if not node.nodeType == node.ELEMENT_NODE:
+						continue
+					tree = self.buildTreeOnTheFly(node)
+					break
+				self.trees[treeName] = tree
+			except:
+				core.log.report(
+					'[sdk.xml.read] Tree creation raised errors.\n\t%s' % sys.exc_info()[0],
+					core.log.errorLevel
+				)
 				return False
 			del treeOrg
 			return True
 		
-		def query(self, treeName, selector, useXPath = True):
+		def query(self, treeName, selector):
+			core.log.report('sdk.xml.query')
 			if not type(treeName) == str or not type(selector) == str:
+				core.log.report(
+					'[sdk.xml.query] unexpected types of treeName and selector',
+					core.log.warningLevel
+				)
 				# return nothing if either no treeName or no selector is not a string
 				return []
-			if not trees.hasKey(treeName):
+			if not self.trees.has_key(treeName):
+				core.log.report(
+					'[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
+					core.log.warningLevel
+				)
 				# return nothing if there is not a tree called by treeName
 				return []
-			# Clear out the tab character
-			selector = re.sub("\t", " ", selector)
-			# Get the path
-			selectorList = re.split("\ +", selector.strip())
-			if len(selectorList) == 0:
-				return []
-			selectorPointer = selectorList[0]
+			# Initialize the list of queried nodes
 			resultList = []
-			resultList.extend(traverse(trees[treeName], selectorList))
+			# Query cleanup (Clear out the tab character)
+			selector = re.sub("\t", " ", selector)
+			# Engroup
+			queries = selector.split(",")
+			for q in queries:
+				# Get the path
+				selectorList = re.split("\ +", q.strip())
+				if len(selectorList) > 0:
+					resultList.extend(self.traverse(self.trees[treeName], selectorList))
+			core.log.report(
+				'End of query with %d object(s) found' % len(resultList),
+				core.log.codeWatchLevel
+			)
+			return self.queriedNodes(resultList)
 		
-		def traverse(self, node, selector, selectorLevel, includeRootNode = True):
+		def traverse(self, node, selector, selectorLevel = 0):
+			core.log.report('sdk.xml.traverse')
 			try:
-				resultList = []
-				if includeRootNode and node.name() == selector[selectorLevel]:
+				core.log.report(
+					'%d:%s (Enter)' % (node.level, node.name()),
+					core.log.codeWatchLevel
+				)
+				rule = self.rule_heirarchy
+				if selector[selectorLevel] in self.specialRules:
 					selectorLevel += 1
-					if len(selector) >= selectorLevel:
-						resultList.append(node)
-				if selectorLevel >= len(selector) - select.count('>') - select.count('+'):
+					try:
+						rule = selector[selectorLevel - 1]
+						core.log.report(
+							'%d:%s (Special Rule: "%s")' % (node.level, node.name(), rule),
+							core.log.codeWatchLevel
+						)
+					except:
+						core.log.report(
+							'%d:%s\n\t|_ Failed to determine the special rule' % (node.level, node.name()),
+							core.log.warningLevel
+						)
+				isTheNodeOnThePath = selector[selectorLevel] == node.name()
+				core.log.report(
+					'%d:%s > %d\n\t|_Query < %d:%s(%s)' % (node.level, node.name(), len(node.children), selectorLevel, ' '.join(selector), rule),
+					core.log.codeWatchLevel
+				)
+				# Check if this node is on the selector path but not the destination
+				if isTheNodeOnThePath:
+					selectorLevel += 1
+					core.log.report(
+						'%d:%s > %d\n\t|_ Query < %d:%s\n\t|_ Found' % (node.level, node.name(), len(node.children), selectorLevel, ' '.join(selector)),
+						core.log.codeWatchLevel
+					)
+				# Allocate the memory of the result list
+				resultList = []
+				# Check the rule
+				if rule == self.rule_directDescendant:
+					if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
+						core.log.report(
+							'%d:%s (Limit break)' % (node.level, node.name()),
+							core.log.codeWatchLevel
+						)
+						return [node]
+					else:
+						core.log.report(
+							'%d:%s (Limit break, Force-stop)' % (node.level, node.name()),
+							core.log.codeWatchLevel
+						)
+						return []
+				#elif rule == self.rule_matchOneNextSibling:
+				#	pass
+				else: #if rule == self.rule_heirarchy
+					if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
+						core.log.report(
+							'%d:%s (Limit break)' % (node.level, node.name()),
+							core.log.codeWatchLevel
+						)
+						return [node]
+					for cnode in node.children:
+						core.log.report(
+							'%d:%s (Recursive Search)' % (cnode.level, cnode.name()),
+							core.log.codeWatchLevel
+						)
+						resultList.extend(self.traverse(cnode, selector, selectorLevel))
 					return resultList
-				for cnode in node.children:
-					if cnode.name() == selector[selectorLevel]:
-						if len(selector) >= selectorLevel:
-							resultList.append(cnode)
-						else:
-							resultList.extend(self.traverse(cnode, selector, selectorLevel + 1, False))
-					resultList.extend(self.traverse(cnode, selector, selectorLevel, False))
-				return resultList
 			except:
+				core.log.report(
+					'[sdk.xml.traverse] Unknown errors\n\t%s' % sys.exc_info()[0],
+					core.log.errorLevel
+				)
 				return []
-
-		def buildTreeOnTheFly(self, rootNode = None, level = 0):
-			if not rootNode:
-				return None
-			if not rootNode.nodeType == rootNode.ELEMENT_NODE:
+		
+		def isTheEndOfPathReached(self, selector, selectorLevel):
+			try:
+				return selectorLevel >= len(selector) - selector.count('>') - selector.count('+') - selector.count('~')
+			except:
+				return False
+		
+		def buildTreeOnTheFly(self, node, parentNode = None, level = 0):
+			if not node.nodeType == node.ELEMENT_NODE:
 				# Ignore non-element node
 				return None
-			treeNode = self.node(rootNode)
-			for node in rootNode.childNodes:
-				childNode = self.buildTreeOnTheFly(node, level + 1)
-				if not childNode:
-					# Ignore null-returned node
-					continue
-				treeNode.children.append(childNode)
-			return treeNode
+			try:
+				# Class-node instance of the parameter `node`
+				treeNode = self.node(node, parentNode, level)
+				if len(node.childNodes) > 0:
+					core.log.report('%d:%s > Constructing children' % (level, treeNode.name()), core.log.codeWatchLevel)
+					for cnode in node.childNodes:
+						try:
+							childNode = self.buildTreeOnTheFly(cnode, treeNode, level + 1)
+							if childNode == None:
+								continue
+							core.log.report('%d:%s/%s' % (level, treeNode.name(), childNode.name()), core.log.codeWatchLevel)
+							treeNode.children.append(childNode)
+						except:
+							core.log.report(
+								'[sdk.xml.buildTreeOnTheFly] Childen creation failed\n\t%s' % sys.exc_info()[0],
+								core.log.errorLevel
+							)
+							return None
+					core.log.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), core.log.codeWatchLevel)
+				return treeNode
+			except:
+				core.log.report(
+					'[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
+					core.log.errorLevel
+				)
+				return None
 
 		class node:
 			level = 0
 			element = None
-			children = []
-
-			def __init__(self, element, level = 0):
+			children = None
+			parentElement = None
+			
+			def __init__(self, element, parent = None, level = 0):
+				core.log.report('%d:%s > Constructed' % (level, element.tagName), core.log.codeWatchLevel)
 				self.level = level
 				self.element = element
-
+				self.children = []
+				self.parentElement = parent
+			
+			def parent(self):
+				return self.parentElement
+			
 			def name(self):
 				return self.element.tagName
 
-			def attr(self, attr = None):
-				return self.element.getAttribute(attr)
-
+			def attr(self, attrName):
+				return self.element.getAttribute(attrName)
+			
 			def data(self):
-				if not self.element.hasChildNodes():
-					# Empty node
-					return ''
-				resultData = []
-				for dataNode in self.element.childNodes:
-					try:
-						if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
-							# Ignore non-data node
+				try:
+					if not self.element.hasChildNodes():
+						# Empty node
+						return ''
+					resultData = []
+					for dataNode in self.element.childNodes:
+						try:
+							if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
+								# Ignore non-data node
+								del resultData
+								return ''
+							resultData.append(dataNode.data)
+						except:
+							# Malform XML document
 							del resultData
 							return ''
-						resultData.append(dataNode.data)
-					except:
-						# Malform XML document
-						del resultData
-						return ''
-				return '\n'.join(resultData)
-
+					return '\n'.join(resultData)
+				except:
+					return ''
+			
+			def child(self, indexNumber = 0):
+				try:
+					return self.children[indexNumber]
+				except:
+					return []
+		
+		class queriedNodes:
+			elements = None
+			
+			def __init__(self, elements):
+				self.elements = elements
+			
+			def eq(self, indexNumber = 0):
+				try:
+					return self.elements[indexNumber]
+				except:
+					return None
+			
+			def data(self):
+				output = []
+				for element in self.elements:
+					output.append(element.data())
+				return ''.join(output)
+			
+			def length(self):
+				return len(self.elements)
+	
 	class crypt:
 		cryptographic_depth_level = 10
 
@@ -694,8 +854,9 @@ class YotsubaFWPackage:
 		def __init__(self, tagPrefix = ''):
 			self.tagPrefix = tagPrefix
 		
-		def loadTagLibrary(self, XMLFilename):
-			self.tags = sdk.xml.query('TagLibrary > Tag', XMLFilename)
+		def loadTagLibrary(self, XMLFilename, forceReload = False):
+			sdk.xml.read('UITags', XMLFilename, forceReload)
+			self.tags = sdk.xml.query('tagLibrary tag', 'UITags')
 		
 		def tag(self, key, newValue = None):
 			if not self.tags.has_key(key) and not newValue == None:

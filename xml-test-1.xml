@@ -1,0 +1,33 @@
+<?xml version='1.0' encoding='utf-8'?>
+<root>
+	<a>This is A</a>
+	<b/>
+	<c>
+		<c1>
+			This is C1.
+			こちらはC1です。
+		</c1>
+		<c2>
+			This is C2.
+			นี่คือ C2
+		</c2>
+		<common>Common tags in C</common>
+	</c>
+	<d>This is D.</d>
+	<e>
+		<e1>
+			<e11>This is E11.</e11>
+			<e12>This is E12.</e12>
+			<common>Common tags in 2</common>
+		</e1>
+		<e2>
+			<e21>
+				<e211>This is E211.</e211>
+			</e21>
+			<e22>This is E22.</e22>
+			<common>Common tags in 2</common>
+		</e2>
+		<e3>This is E3.</e3>
+		<common>Common tags in E</common>
+	</e>
+</root>
