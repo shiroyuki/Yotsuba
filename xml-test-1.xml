@@ -11,7 +11,7 @@
 			This is C2.
 			นี่คือ C2
 		</c2>
-		<common>Common tags in C</common>
+		<common name="c">Common tags in C with the name of C</common>
 	</c>
 	<d>This is D.</d>
 	<e>

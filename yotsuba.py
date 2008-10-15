@@ -131,73 +131,6 @@ class YotsubaSDKPackage:
 				core.log.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', core.log.errorLevel)
 			return result
 	
-	class xmlPrototype:
-		"""
-		This package is a breakthrough of XML parsers in Python using
-		basic CSS3-selector method, instead of XPath. The rules is based on jQuery API
-		
-		This function is still based on ElementTree API in order to reduce
-		the additional footprint.
-		"""
-		rule_heirarchy = ' '
-		rule_matchNextLevel = '>'
-		rule_matchOneNextSibling = '+'
-		rule_matchAllNextSiblings = '~'
-		specialRules = [
-			rule_matchNextLevel,
-			rule_matchOneNextSibling,
-			rule_matchAllNextSiblings
-		]
-		trees = {}
-		
-		def test(self, filename):
-			print sdk.fs.read('xml-test-1.xml');
-		
-		def query(self, selector, source):
-			# Checks type of both `selector` and `source` (expected: str)
-			if not (type(selector) == str and type(source) == str):
-				return []
-			# Initializes local variables
-			resultElements = []
-			resultElement = None
-			groups = selector.split(",")
-			# Prepares data
-			if sdk.fs.exists(source) and not self.files.has_key(source):
-				self.trees[source] = ET.parse(source)
-			else:
-				self.trees[source] = ET.fromstring(source)
-			# Iterates the dom tree
-			for group in groups:
-				resultElement = self.queryPerGroup(group, source)
-				if resultElement and type(resultElement) == list and len(resultElement) > 0:
-					resultElement.append(resultElement)
-			# Frees memory
-			del self.trees[source]
-			# Returns result
-			return resultElement
-		
-		def queryPerGroup(self, selector, referrer):
-			selector = selector.strip()
-			if re.match("^(>|\+|~)", selector) or  re.match("(>|\+|~)$", selector):
-				return None
-			order = re.split("( |\t)+", selector)
-			return self.traverse(order, 0, referrer)
-		
-		# Unfinished
-		def traverse(self, order, depth, referrer, path = [], rule = None):
-			# Set the rule
-			if not rule:
-				rule = self.rule_heirarchy
-			if order[depth].strip() in self.specialRules:
-				rule = order[depth]
-				depth += 1
-			# Set the path
-			if not path:
-				path.append(order[depth])
-			nodes = self.trees[referrer].findall('/'.join(path))
-			# Check the result
-			pass
-	
 	class xml:
 		"""
 		This package is a breakthrough of XML parsers in Python using
@@ -253,14 +186,14 @@ class YotsubaSDKPackage:
 		
 		def query(self, treeName, selector):
 			core.log.report('sdk.xml.query')
-			if not type(treeName) == str or not type(selector) == str:
+			if not type(selector) == str:
 				core.log.report(
 					'[sdk.xml.query] unexpected types of treeName and selector',
 					core.log.warningLevel
 				)
 				# return nothing if either no treeName or no selector is not a string
 				return []
-			if not self.trees.has_key(treeName):
+			if type(treeName) == str and not self.trees.has_key(treeName):
 				core.log.report(
 					'[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
 					core.log.warningLevel
@@ -269,6 +202,11 @@ class YotsubaSDKPackage:
 				return []
 			# Initialize the list of queried nodes
 			resultList = []
+			startupNode = None
+			try:
+				startupNode = self.trees[treeName]
+			except:
+				startupNode = treeName
 			# Query cleanup (Clear out the tab character)
 			selector = re.sub("\t", " ", selector)
 			# Engroup
@@ -277,7 +215,7 @@ class YotsubaSDKPackage:
 				# Get the path
 				selectorList = re.split("\ +", q.strip())
 				if len(selectorList) > 0:
-					resultList.extend(self.traverse(self.trees[treeName], selectorList))
+					resultList.extend(self.traverse(startupNode, selectorList))
 			core.log.report(
 				'End of query with %d object(s) found' % len(resultList),
 				core.log.codeWatchLevel
@@ -305,7 +243,19 @@ class YotsubaSDKPackage:
 							'%d:%s\n\t|_ Failed to determine the special rule' % (node.level, node.name()),
 							core.log.warningLevel
 						)
-				isTheNodeOnThePath = selector[selectorLevel] == node.name()
+				# If two or more rules are specified consecutively, regards this selector as ill-formatted
+				if selector[selectorLevel] in self.specialRules:
+					core.log.report(
+						'%d:%s\n\t|_ Ill-formatted selector' % (node.level, node.name()),
+						core.log.warningLevel
+					)
+					return []
+				s = self.makeSelectorObject(selector[selectorLevel])
+				isTheNodeOnThePath = s.name() == '*' or (s.name() == '' and (len(s.attr().keys()) > 0 or len(s.filter()) > 0)) or s.name() == node.name()
+				for attrIndex in s.attr().keys():
+					if not node.attr(attrIndex) == s.attr(attrIndex) and not (s.attr(attrIndex) == None and node.hasAttr(attrIndex)):
+						isTheNodeOnThePath = False
+						break
 				core.log.report(
 					'%d:%s > %d\n\t|_Query < %d:%s(%s)' % (node.level, node.name(), len(node.children), selectorLevel, ' '.join(selector), rule),
 					core.log.codeWatchLevel
@@ -337,11 +287,18 @@ class YotsubaSDKPackage:
 				#	pass
 				else: #if rule == self.rule_heirarchy
 					if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
-						core.log.report(
-							'%d:%s (Limit break)' % (node.level, node.name()),
-							core.log.codeWatchLevel
-						)
-						return [node]
+						if self.makeSelectorObject(selector[-1]).name() == '*':
+							selectorLevel -= 1
+							core.log.report(
+								'%d:%s (Limit pull-back)' % (node.level, node.name()),
+								core.log.codeWatchLevel
+							)
+						else:
+							core.log.report(
+								'%d:%s (Limit break)' % (node.level, node.name()),
+								core.log.codeWatchLevel
+							)
+						resultList.append(node)
 					for cnode in node.children:
 						core.log.report(
 							'%d:%s (Recursive Search)' % (cnode.level, cnode.name()),
@@ -355,6 +312,74 @@ class YotsubaSDKPackage:
 					core.log.errorLevel
 				)
 				return []
+		
+		def makeSelectorObject(self, selectorObjectString):
+			"""
+			Makes a selector object with a selector-object string (a tag name with or without attributes).
+			Returns a null object if the selectorObjectString is not well-formatted.
+			
+			A well-formatted selector objects should be in the following patterns.
+			- element
+			- element[attrName]
+			- element[attrName=attrValue]
+			- element[attrName^=attrValue]
+			- element[attrName$=attrValue]
+			- element[attrName~=attrValue]
+			- element[attrName*=attrValue]
+			- element[attrName|=attrValue]
+			- element[attrName1=attrValue1][attrName2=attrValue2]...[attrNameN=attrValueN]
+			- element[...]:filter1:filter2:...:filterN
+			
+			(Source: http://docs.jquery.com/Selectors)
+			(Source: http://www.w3.org/TR/css3-selectors/#selectors)
+			"""
+			
+			SOName = ''
+			SOOptions = ''
+			SOAttrs = ''
+			SOFilters = ''
+			RE_Attr = re.compile(".*\[.*")
+			RE_Filter = re.compile(".*:.*")
+			if RE_Attr.match(selectorObjectString) and RE_Filter.match(selectorObjectString):
+				# Extract the tag name and its options/filters
+				SOName, SOOptions = re.split("\[", selectorObjectString, 1)
+				# Extract the attribute filters and the selecting filters
+				SOAttrs, SOFilters = re.split(":", SOOptions, 1)
+			elif RE_Attr.match(selectorObjectString) and not RE_Filter.match(selectorObjectString):
+				# Extract the tag name and its options/filters
+				SOName, SOOptions = re.split("\[", selectorObjectString, 1)
+				# Extract the attribute filters and the selecting filters
+				SOAttrs = SOOptions
+			elif not RE_Attr.match(selectorObjectString) and RE_Filter.match(selectorObjectString):
+				# Extract the tag name and its options/filters
+				SOName, SOOptions = re.split(":", selectorObjectString, 1)
+				# Extract the attribute filters and the selecting filters
+				SOFilters = SOOptions
+			else:
+				SOName = selectorObjectString
+			# Free memory
+			del SOOptions
+			# Check the requirement
+			if (len(SOAttrs) > 0 and not re.match(".+\]$", SOAttrs)) or re.match(".*:$", SOFilters):
+				return None
+			# Engroup attributes
+			SOAttrs = re.split("\]\[", SOAttrs[:-1])
+			# Engroup filters
+			SOFilters = re.split(":", SOFilters)
+			# Prepare to make an object
+			SOAttrsRaw = SOAttrs
+			SOAttrs = {}
+			for SOAttr in SOAttrsRaw:
+				if re.match("[a-zA-Z0-9_\-]+=.+", SOAttr):
+					k, v = re.split("=", SOAttr, 1)
+					SOAttrs[k] = v
+				elif re.match("[a-zA-Z0-9_\-]+", SOAttr):
+					k = SOAttr
+					SOAttrs[k] = None
+			if SOName == '' and (len(SOAttrs) == 0 or len(SOFilters) == 0):
+				return None
+			return self.selectorObject(SOName, SOAttrs, SOFilters)
+			
 		
 		def isTheEndOfPathReached(self, selector, selectorLevel):
 			try:
@@ -415,6 +440,9 @@ class YotsubaSDKPackage:
 			def attr(self, attrName):
 				return self.element.getAttribute(attrName)
 			
+			def hasAttr(self, attrName):
+				return self.element.hasAttribute(attrName)
+			
 			def data(self):
 				try:
 					if not self.element.hasChildNodes():
@@ -462,7 +490,36 @@ class YotsubaSDKPackage:
 			
 			def length(self):
 				return len(self.elements)
-	
+		class selectorObject:
+			SOName = None
+			SOAttrs = None
+			SOFilters = None
+			
+			def __init__(self, name, attrs = {}, filters = []):
+				self.SOName = name
+				if type(attrs) == dict:
+					self.SOAttrs = attrs
+				else:
+					self.SOAttrs = {}
+				if type(filters) == list:
+					self.SOFilters = filters
+				else:
+					self.SOFilters = []
+			
+			def name(self):
+				return self.SOName
+			
+			def attr(self, attrName = None):
+				if not attrName:
+					return self.SOAttrs
+				try:
+					return self.SOAttrs[attrName]
+				except:
+					return ''
+			
+			def filter(self):
+				return self.SOFilters
+
 	class crypt:
 		cryptographic_depth_level = 10
 
