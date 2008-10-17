@@ -253,9 +253,24 @@ class YotsubaSDKPackage:
 				s = self.makeSelectorObject(selector[selectorLevel])
 				isTheNodeOnThePath = s.name() == '*' or (s.name() == '' and (len(s.attr().keys()) > 0 or len(s.filter()) > 0)) or s.name() == node.name()
 				for attrIndex in s.attr().keys():
-					if not node.attr(attrIndex) == s.attr(attrIndex) and not (s.attr(attrIndex) == None and node.hasAttr(attrIndex)):
-						isTheNodeOnThePath = False
-						break
+					if s.attr(attrIndex)[1] == None:
+						if not node.hasAttr(attrIndex):
+							isTheNodeOnThePath = False
+							break
+					else:
+						if len(node.attr(attrIndex)) == 0:
+							isTheNodeOnThePath = False
+							break
+						else:
+							s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
+							if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
+							and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+							and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+							and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
+							and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
+							and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
+								isTheNodeOnThePath = False
+								break
 				core.log.report(
 					'%d:%s > %d\n\t|_Query < %d:%s(%s)' % (node.level, node.name(), len(node.children), selectorLevel, ' '.join(selector), rule),
 					core.log.codeWatchLevel
@@ -372,10 +387,25 @@ class YotsubaSDKPackage:
 			for SOAttr in SOAttrsRaw:
 				if re.match("[a-zA-Z0-9_\-]+=.+", SOAttr):
 					k, v = re.split("=", SOAttr, 1)
-					SOAttrs[k] = v
+					SOAttrs[k] = ['=', v]
+				elif re.match("[a-zA-Z0-9_\-]+\|=.+", SOAttr):
+					k, v = re.split("\|=", SOAttr, 1)
+					SOAttrs[k] = ['|=', v]
+				elif re.match("[a-zA-Z0-9_\-]+\^=.+", SOAttr):
+					k, v = re.split("\^=", SOAttr, 1)
+					SOAttrs[k] = ['^=', v]
+				elif re.match("[a-zA-Z0-9_\-]+\$=.+", SOAttr):
+					k, v = re.split("\$=", SOAttr, 1)
+					SOAttrs[k] = ['$=', v]
+				elif re.match("[a-zA-Z0-9_\-]+\*=.+", SOAttr):
+					k, v = re.split("\*=", SOAttr, 1)
+					SOAttrs[k] = ['*=', v]
+				elif re.match("[a-zA-Z0-9_\-]+\~=.+", SOAttr):
+					k, v = re.split("\~=", SOAttr, 1)
+					SOAttrs[k] = ['~=', v]
 				elif re.match("[a-zA-Z0-9_\-]+", SOAttr):
 					k = SOAttr
-					SOAttrs[k] = None
+					SOAttrs[k] = [None, None]
 			if SOName == '' and (len(SOAttrs) == 0 or len(SOFilters) == 0):
 				return None
 			return self.selectorObject(SOName, SOAttrs, SOFilters)
@@ -515,7 +545,7 @@ class YotsubaSDKPackage:
 				try:
 					return self.SOAttrs[attrName]
 				except:
-					return ''
+					return [None, '']
 			
 			def filter(self):
 				return self.SOFilters

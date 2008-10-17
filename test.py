@@ -67,9 +67,17 @@ for fq in failedQueries:
 passedQueries = {
 	'common': 4,
 	'common[id]': 0,
-	'common[name]': 1,
+	'common[name]': 2,
 	'common[id=c]': 0,
 	'common[name=c]': 1,
+	'common[name|=utf]': 1,
+	'common[name~=of]': 1,
+	'common[name~=f]': 0,
+	'common[name^=utf-8\']': 1,
+	'common[name^=utf]': 0,
+	'common[name$=buddha]': 1,
+	'common[name$=dha]': 0,
+	'common[name*=am]': 1,
 	'[name=c]': 1,
 	'root common': 4,
 	'root * common': 4,
@@ -87,20 +95,21 @@ for pqK, pqV in passedQueries.iteritems():
 tEqual("XML Query Test (Data)", yotsuba.sdk.xml.query('test', 'c c1').data(), yotsuba.sdk.xml.trees['test'].children[2].children[0].data())
 # sdk.xml > Selector-object tests
 passedQueries = {
-	'element': ['element', '', ''],
-	'element[id]': ['element', None, ''],
-	'element[id=0]': ['element', '0', ''],
-	'element:first-child': ['element', '', 'first-child'],
-	'element[id=0]:first-child': ['element', '0', 'first-child'],
-	'element[class=what][id=0][name=google]:first-child:empty': ['element', '0', 'first-childempty']
+	'element': ['element', None, '', ''],
+	'element[id]': ['element', None, None, ''],
+	'element[id=0]': ['element', '=', '0', ''],
+	'element:first-child': ['element', None, '', 'first-child'],
+	'element[id=0]:first-child': ['element', '=', '0', 'first-child'],
+	'element[class=what][id=0][name=google]:first-child:empty': ['element', '=', '0', 'first-childempty']
 }
 for pqK, pqV in passedQueries.iteritems():
 	print ":\tCreating SO from '%s'" % pqK
 	tEqual("The selector object construction (Name)", yotsuba.sdk.xml.makeSelectorObject(pqK).name(), pqV[0])
-	tEqual("The selector object construction (ID)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id'), pqV[1])
-	tEqual("The selector object construction (Filters)", ''.join(yotsuba.sdk.xml.makeSelectorObject(pqK).filter()), pqV[2])
+	tEqual("The selector object construction (ID/Operator)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id')[0], pqV[1])
+	tEqual("The selector object construction (ID/Value)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id')[1], pqV[2])
+	tEqual("The selector object construction (Filters)", ''.join(yotsuba.sdk.xml.makeSelectorObject(pqK).filter()), pqV[3])
 print "------------------------------------------------------------------------"
-print "Score\t%d/%d\t%.2f%%" % (numOfCases - numOfFailedCases, numOfCases, (numOfCases - numOfFailedCases)/numOfCases*100)
+print "Score\t%d/%d\t%.2f%%" % (numOfCases - numOfFailedCases, numOfCases, (numOfCases - numOfFailedCases)*100/numOfCases)
 print "========================================================================"
 if (numOfFailedCases > 0 or forceShowLog) and not forceHideLog:
 	print "Yotsuba Project 2 > Testing Logs"
