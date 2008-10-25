@@ -6,7 +6,7 @@ global numOfCases
 global numOfFailedCases
 
 forceShowLog = False
-forceHideLog = True
+forceHideLog = False
 numOfCases = 0
 numOfFailedCases = 0
 
@@ -53,7 +53,7 @@ print "Yotsuba Project 2 > Unit Test"
 print "------------------------------------------------------------------------"
 # sdk.xml > Initialization test
 yotsuba.sdk.xml.read("test", "xml-test-1.xml")
-tEqual("XML Tree Construction", len(yotsuba.sdk.xml.trees['test'].children), 5)
+tEqual("XML Tree Construction", len(yotsuba.sdk.xml.trees['test'].children), 6)
 tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().name(), 'a')
 tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().parent().name(), 'root')
 # sdk.xml > Existance tests
@@ -81,11 +81,14 @@ passedQueries = {
 	'[name=c]': 1,
 	'root common': 4,
 	'root * common': 4,
-	'root *': 19,
-	'*': 20,
+	'root *': 20,
+	'*': 21,
 	'c common': 1,
+	'c + d': 1,
+	'c ~ e': 2,
 	'e common': 3,
 	'e > common': 1,
+	'e > e1 common': 1,
 	'd common': 0,
 	'c c1, e e11': 2
 }
@@ -114,5 +117,18 @@ print "========================================================================"
 if (numOfFailedCases > 0 or forceShowLog) and not forceHideLog:
 	print "Yotsuba Project 2 > Testing Logs"
 	print "------------------------------------------------------------------------"
-	print yotsuba.core.log.export();
+	try:
+		yotsuba.sdk.fs.remove('test.log')
+	except:
+		pass
+	if not yotsuba.sdk.fs.writable('./'):
+		print 'Not writable'
+	if yotsuba.sdk.fs.write('test.log', yotsuba.core.log.export()):
+		print 'The report was just written'
+	else:
+		print 'The report was not written'
+	if not yotsuba.sdk.fs.exists('test.log'):
+		print 'Failed to write the report'
+	else:
+		print "See the 'test.log'"
 	print "========================================================================"

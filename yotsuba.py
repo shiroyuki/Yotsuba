@@ -213,6 +213,10 @@ class YotsubaSDKPackage:
 			queries = selector.split(",")
 			for q in queries:
 				# Get the path
+				core.log.report(
+					'Single Query for %s' % q,
+					core.log.codeWatchLevel
+				)
 				selectorList = re.split("\ +", q.strip())
 				if len(selectorList) > 0:
 					resultList.extend(self.traverse(startupNode, selectorList))
@@ -222,7 +226,7 @@ class YotsubaSDKPackage:
 			)
 			return self.queriedNodes(resultList)
 		
-		def traverse(self, node, selector, selectorLevel = 0):
+		def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
 			core.log.report('sdk.xml.traverse')
 			try:
 				core.log.report(
@@ -230,6 +234,8 @@ class YotsubaSDKPackage:
 					core.log.codeWatchLevel
 				)
 				rule = self.rule_heirarchy
+				if selectorLevel >= len(selector):
+					return []
 				if selector[selectorLevel] in self.specialRules:
 					selectorLevel += 1
 					try:
@@ -251,7 +257,13 @@ class YotsubaSDKPackage:
 					)
 					return []
 				s = self.makeSelectorObject(selector[selectorLevel])
-				isTheNodeOnThePath = s.name() == '*' or (s.name() == '' and (len(s.attr().keys()) > 0 or len(s.filter()) > 0)) or s.name() == node.name()
+				isTheNodeOnThePath = \
+					s.name() == '*'\
+					or (
+						s.name() == ''\
+						and (len(s.attr().keys()) > 0 or len(s.filter()) > 0)
+					)\
+					or s.name() == node.name()
 				for attrIndex in s.attr().keys():
 					if s.attr(attrIndex)[1] == None:
 						if not node.hasAttr(attrIndex):
@@ -298,9 +310,11 @@ class YotsubaSDKPackage:
 							core.log.codeWatchLevel
 						)
 						return []
-				#elif rule == self.rule_matchOneNextSibling:
-				#	pass
-				else: #if rule == self.rule_heirarchy
+				elif rule == self.rule_heirarchy:
+					core.log.report(
+						'%d:%s (Normal Search)' % (node.level, node.name()),
+						core.log.codeWatchLevel
+					)
 					if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
 						if self.makeSelectorObject(selector[-1]).name() == '*':
 							selectorLevel -= 1
@@ -314,16 +328,66 @@ class YotsubaSDKPackage:
 								core.log.codeWatchLevel
 							)
 						resultList.append(node)
+					cnodeIndex = -1
+					doSkip = True
 					for cnode in node.children:
+						cnodeIndex += 1
+						if poleNode and poleNode.name() == cnode.name() and poleNode.level == cnode.level:
+							core.log.report(
+								'%d:%s (Recursive Search LAST SKIPPED - %s)' % (cnode.level, cnode.name(), poleNode.name()),
+								core.log.codeWatchLevel
+							)
+							doSkip = False
+							continue
+						if poleNode and doSkip:
+							core.log.report(
+								'%d:%s (Recursive Search SKIPPED - %s)' % (cnode.level, cnode.name(), poleNode.name()),
+								core.log.codeWatchLevel
+							)
+							continue
+						if singleSiblingSearch:
+							doSkip = True
 						core.log.report(
 							'%d:%s (Recursive Search)' % (cnode.level, cnode.name()),
 							core.log.codeWatchLevel
 						)
 						resultList.extend(self.traverse(cnode, selector, selectorLevel))
 					return resultList
+				elif rule == self.rule_matchOneNextSibling:
+					core.log.report(
+						'%d:%s (Single Sibling Search -- Start)' % (node.level, node.name()),
+						core.log.codeWatchLevel
+					)
+					resultList.extend(
+						self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
+					)
+					core.log.report(
+						'%d:%s (Single Sibling Search -- End)' % (node.level, node.name()),
+						core.log.codeWatchLevel
+					)
+					return resultList
+				elif rule == self.rule_matchAllNextSiblings:
+					core.log.report(
+						'%d:%s (Multiple Sibling Search -- Start)' % (node.level, node.name()),
+						core.log.codeWatchLevel
+					)
+					resultList.extend(
+						self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
+					)
+					core.log.report(
+						'%d:%s (Multiple Sibling Search -- End)' % (node.level, node.name()),
+						core.log.codeWatchLevel
+					)
+					return resultList
+				else:
+					core.log.report(
+						'%d:%s (No iteration)' % (node.level, node.name()),
+						core.log.codeWatchLevel
+					)
+					return []
 			except:
 				core.log.report(
-					'[sdk.xml.traverse] Unknown errors\n\t%s' % sys.exc_info()[0],
+					'[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0]),
 					core.log.errorLevel
 				)
 				return []
@@ -417,18 +481,20 @@ class YotsubaSDKPackage:
 			except:
 				return False
 		
-		def buildTreeOnTheFly(self, node, parentNode = None, level = 0):
+		def buildTreeOnTheFly(self, node, parentNode = None, level = 0, levelIndex = 0):
 			if not node.nodeType == node.ELEMENT_NODE:
 				# Ignore non-element node
 				return None
 			try:
 				# Class-node instance of the parameter `node`
-				treeNode = self.node(node, parentNode, level)
+				treeNode = self.node(node, parentNode, level, levelIndex)
 				if len(node.childNodes) > 0:
 					core.log.report('%d:%s > Constructing children' % (level, treeNode.name()), core.log.codeWatchLevel)
+					cnodeIndex = -1
 					for cnode in node.childNodes:
 						try:
-							childNode = self.buildTreeOnTheFly(cnode, treeNode, level + 1)
+							cnodeIndex += 1
+							childNode = self.buildTreeOnTheFly(cnode, treeNode, level + 1, cnodeIndex)
 							if childNode == None:
 								continue
 							core.log.report('%d:%s/%s' % (level, treeNode.name(), childNode.name()), core.log.codeWatchLevel)
@@ -453,13 +519,15 @@ class YotsubaSDKPackage:
 			element = None
 			children = None
 			parentElement = None
+			hash = None
 			
-			def __init__(self, element, parent = None, level = 0):
+			def __init__(self, element, parent = None, level = 0, levelIndex = 0):
 				core.log.report('%d:%s > Constructed' % (level, element.tagName), core.log.codeWatchLevel)
 				self.level = level
 				self.element = element
 				self.children = []
 				self.parentElement = parent
+				self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
 			
 			def parent(self):
 				return self.parentElement
@@ -504,7 +572,11 @@ class YotsubaSDKPackage:
 			elements = None
 			
 			def __init__(self, elements):
-				self.elements = elements
+				self.elements = []
+				for element in elements:
+					if element in self.elements:
+						continue
+					self.elements.append(element)
 			
 			def eq(self, indexNumber = 0):
 				try:
@@ -709,10 +781,11 @@ class YotsubaSDKPackage:
 			# This part does not use pickle.
 			if self.isfile(filename):
 				os.unlink(filename)
+			try:
 				fp = open(filename, mode)
 				fp.write(data)
 				fp.close()
-			else:
+			except:
 				return False
 			return True
 
