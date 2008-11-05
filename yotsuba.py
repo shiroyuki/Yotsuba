@@ -1,11 +1,12 @@
 #!/usr/bin/python
-# Yotsuba SDK and Framework
+# Yotsuba SDK and Framework (Prototype)
 # Version 2.0 (Developmental)
 # (C) 2007 Juti Noppornpitak <juti_n@yahoo.co.jp>
 # LGPL License
 
-import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, Cookie, xml.dom.minidom
-import xml.etree.ElementTree as ET
+import os, sys, re, dircache, pickle, cgi, hashlib, base64, Cookie
+import xml.dom.minidom # for sdk.xml
+import urllib2
 
 # SDK.EC > Default Configuration
 DEFAULT_CONTENT_TYPE = 'text/html;charset=UTF-8'
@@ -28,87 +29,6 @@ global fw
 global config
 config = {}
 
-class YotsubaCorePackage:
-	class base:
-		name = 'Yotsuba SDK'
-		version = 2.0
-
-		def config(source, value = None, force_to_reload = False):
-			"""
-			This function is to update and possibly append
-			the configuration of the SDK specifically for
-			one session of execution.
-
-			The parameter `source` can be either types `str` (string)
-			or `dict` (dictionary). If it is of type string and the
-			parameter `value` is set, this function treats the string
-			`source` as a key variable. Otherwise, it treats the
-			parameter `source` as a filename.
-
-			The parameter `force_to_reload` is optional, used when
-			you want to force the function to wipe out the current
-			configuration and load the currently submitted one.
-			"""
-			if type(source) == dict:
-				config.update(source)
-			if type(source) == str:
-				if not value:
-					# Require XML module
-					pass
-					#YotsubaSDKPackage.fs.read(source)
-				else:
-					config[source] = value
-	class log:
-		# Local configuration
-		maxAllowedLevel = 2
-		# Definitions
-		noticeLevel = 0
-		warningLevel = 1
-		errorLevel = 2
-		codeWatchLevel = 3
-		# Storage
-		logs = []
-		
-		def report(self, content, level = 0):
-			self.logs.append(self.logObject(content, level))
-		def export(self, level = -1, onlyOneLevel = False, toArray = False):
-			"""
-			Export logs as a hash table
-			"""
-			table = []
-			for log in self.logs:
-				if log.level < level:
-					continue
-				textMessage = ''
-				if log.level == self.noticeLevel:
-					textMessage = 'Note'
-				elif log.level == self.warningLevel:
-					textMessage = 'Warn'
-				elif log.level == self.errorLevel:
-					textMessage = 'Error'
-				elif log.level == self.codeWatchLevel:
-					textMessage = 'Watch'
-				else:
-					textMessage = 'Alert'
-				textMessage += ':\t' + log.content
-				table.append(textMessage)
-			return '\n'.join(table)
-		class logObject:
-			"""
-			The object class of log message
-			"""
-			# 0: Notification (Default)
-			# 1: Warning
-			# 2: Error
-			
-			content = ''
-			level = 0
-			time = None
-			def __init__(self, content, level = 0):
-				self.content = content
-				self.level = level
-
-class YotsubaSDKPackage:
 	class time:
 		"""
 		This package is the simple version of the time object in Python.
@@ -756,11 +676,8 @@ class YotsubaSDKPackage:
 		# Web Data Fetching Function
 		def readWeb(self, url):
 			try:
-				import pycurl
-				rp = pycurl.Curl()
-				rp.setopt(pycurl.URL, url)
-				rp.perform()
-				return rp.getinfo(pycurl.HTTP_CODE)
+				wp = urllib2.urlopen(url);
+				return wp.read()
 			except:
 				return None
 
@@ -876,7 +793,6 @@ class YotsubaSDKPackage:
 				if data['from'] == '' or data['to'] == '':
 					return False
 
-class YotsubaFWPackage:
 	class ec:
 		"""
 		Environment Controller
@@ -1067,22 +983,3 @@ class YotsubaFWPackage:
 			if queryString and len(queryString) >= self.minimumLengthOfQueryString:
 				resultURL += '?%s' % queryString
 			return resultURL
-
-class YotsubaCore:
-	base = YotsubaCorePackage.base()
-	log = YotsubaCorePackage.log()
-
-class YotsubaSDK:
-	crypt = YotsubaSDKPackage.crypt()
-	fs = YotsubaSDKPackage.fs()
-	log = YotsubaSDKPackage.log()
-	mail = YotsubaSDKPackage.mail()
-	time = YotsubaSDKPackage.time()
-	xml = YotsubaSDKPackage.xml()
-
-class YotsubaFW:
-	ec = YotsubaFWPackage.ec()
-
-core = YotsubaCore()
-sdk = YotsubaSDK()
-fw = YotsubaFW()

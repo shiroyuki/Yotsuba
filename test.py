@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-import yotsuba
+import y
 
 global numOfCases
 global numOfFailedCases
@@ -47,22 +47,22 @@ def tExist(label, testingObject, expectedFailed = False):
 		numOfFailedCases += 1
 		return False
 
-yotsuba.core.log.report("Begin testing")
+yotsuba.log.report("Begin testing")
 print "========================================================================"
-print "Yotsuba Project 2 > Unit Test"
+print "Y Project 2 > Unit Test"
 print "------------------------------------------------------------------------"
 # sdk.xml > Initialization test
-yotsuba.sdk.xml.read("test", "xml-test-1.xml")
-tEqual("XML Tree Construction", len(yotsuba.sdk.xml.trees['test'].children), 6)
-tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().name(), 'a')
-tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().parent().name(), 'root')
+yotsuba.xml.read("test", "xml-test-1.xml")
+tEqual("XML Tree Construction", len(yotsuba.xml.trees['test'].children), 6)
+tEqual("XML Tree Construction", yotsuba.xml.trees['test'].child().name(), 'a')
+tEqual("XML Tree Construction", yotsuba.xml.trees['test'].child().parent().name(), 'root')
 # sdk.xml > Existance tests
 passedQueries = ['c1', 'c c1', 'root c c1', 'root c1', 'root > c c1', 'root c > c1', 'root > c > c1', 'common', 'c c1, e e11']
 failedQueries = ['c3', 'c c3', 'root > c1', 'root c e1']
 for pq in passedQueries:
-	tMore("XML Query Test / Existance (%s)" % pq, yotsuba.sdk.xml.query('test', pq).length(), 0)
+	tMore("XML Query Test / Existance (%s)" % pq, yotsuba.xml.query('test', pq).length(), 0)
 for fq in failedQueries:
-	tEqual("XML Query Test / Existance (%s)" % fq, yotsuba.sdk.xml.query('test', fq).length(), 0)
+	tEqual("XML Query Test / Existance (%s)" % fq, yotsuba.xml.query('test', fq).length(), 0)
 # sdk.xml > Correctness tests
 passedQueries = {
 	'common': 4,
@@ -93,9 +93,9 @@ passedQueries = {
 	'c c1, e e11': 2
 }
 for pqK, pqV in passedQueries.iteritems():
-	tEqual("XML Query Test / Correctness (%s)" % pqK, yotsuba.sdk.xml.query('test', pqK).length(), pqV)
+	tEqual("XML Query Test / Correctness (%s)" % pqK, yotsuba.xml.query('test', pqK).length(), pqV)
 # sdk.xml > Data extraction tests
-tEqual("XML Query Test (Data)", yotsuba.sdk.xml.query('test', 'c c1').data(), yotsuba.sdk.xml.trees['test'].children[2].children[0].data())
+tEqual("XML Query Test (Data)", yotsuba.xml.query('test', 'c c1').data(), yotsuba.xml.trees['test'].children[2].children[0].data())
 # sdk.xml > Selector-object tests
 passedQueries = {
 	'element': ['element', None, '', ''],
@@ -107,27 +107,27 @@ passedQueries = {
 }
 for pqK, pqV in passedQueries.iteritems():
 	print ":\tCreating SO from '%s'" % pqK
-	tEqual("The selector object construction (Name)", yotsuba.sdk.xml.makeSelectorObject(pqK).name(), pqV[0])
-	tEqual("The selector object construction (ID/Operator)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id')[0], pqV[1])
-	tEqual("The selector object construction (ID/Value)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id')[1], pqV[2])
-	tEqual("The selector object construction (Filters)", ''.join(yotsuba.sdk.xml.makeSelectorObject(pqK).filter()), pqV[3])
+	tEqual("The selector object construction (Name)", yotsuba.xml.makeSelectorObject(pqK).name(), pqV[0])
+	tEqual("The selector object construction (ID/Operator)", yotsuba.xml.makeSelectorObject(pqK).attr('id')[0], pqV[1])
+	tEqual("The selector object construction (ID/Value)", yotsuba.xml.makeSelectorObject(pqK).attr('id')[1], pqV[2])
+	tEqual("The selector object construction (Filters)", ''.join(yotsuba.xml.makeSelectorObject(pqK).filter()), pqV[3])
 print "------------------------------------------------------------------------"
 print "Score\t%d/%d\t%.2f%%" % (numOfCases - numOfFailedCases, numOfCases, (numOfCases - numOfFailedCases)*100/numOfCases)
 print "========================================================================"
 if (numOfFailedCases > 0 or forceShowLog) and not forceHideLog:
-	print "Yotsuba Project 2 > Testing Logs"
+	print "Y Project 2 > Testing Logs"
 	print "------------------------------------------------------------------------"
 	try:
-		yotsuba.sdk.fs.remove('test.log')
+		yotsuba.fs.remove('test.log')
 	except:
 		pass
-	if not yotsuba.sdk.fs.writable('./'):
+	if not yotsuba.fs.writable('./'):
 		print 'Not writable'
-	if yotsuba.sdk.fs.write('test.log', yotsuba.core.log.export()):
+	if yotsuba.fs.write('test.log', yotsuba.log.export()):
 		print 'The report was just written'
 	else:
 		print 'The report was not written'
-	if not yotsuba.sdk.fs.exists('test.log'):
+	if not yotsuba.fs.exists('test.log'):
 		print 'Failed to write the report'
 	else:
 		print "See the 'test.log'"
