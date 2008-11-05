@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 
-import y
+import yotsuba
 
 global numOfCases
 global numOfFailedCases
 
 forceShowLog = False
-forceHideLog = False
+forceHideLog = True
 numOfCases = 0
 numOfFailedCases = 0
 
@@ -47,15 +47,11 @@ def tExist(label, testingObject, expectedFailed = False):
 		numOfFailedCases += 1
 		return False
 
-yotsuba.log.report("Begin testing")
 print "========================================================================"
-print "Y Project 2 > Unit Test"
+print "Yotsuba Project 2 > Unit Test"
 print "------------------------------------------------------------------------"
 # sdk.xml > Initialization test
 yotsuba.xml.read("test", "xml-test-1.xml")
-tEqual("XML Tree Construction", len(yotsuba.xml.trees['test'].children), 6)
-tEqual("XML Tree Construction", yotsuba.xml.trees['test'].child().name(), 'a')
-tEqual("XML Tree Construction", yotsuba.xml.trees['test'].child().parent().name(), 'root')
 # sdk.xml > Existance tests
 passedQueries = ['c1', 'c c1', 'root c c1', 'root c1', 'root > c c1', 'root c > c1', 'root > c > c1', 'common', 'c c1, e e11']
 failedQueries = ['c3', 'c c3', 'root > c1', 'root c e1']
@@ -115,7 +111,7 @@ print "------------------------------------------------------------------------"
 print "Score\t%d/%d\t%.2f%%" % (numOfCases - numOfFailedCases, numOfCases, (numOfCases - numOfFailedCases)*100/numOfCases)
 print "========================================================================"
 if (numOfFailedCases > 0 or forceShowLog) and not forceHideLog:
-	print "Y Project 2 > Testing Logs"
+	print "Yotsuba Project 2 > Testing Logs"
 	print "------------------------------------------------------------------------"
 	try:
 		yotsuba.fs.remove('test.log')
