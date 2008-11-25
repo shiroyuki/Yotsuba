@@ -5,7 +5,6 @@
 # LGPL License
 
 import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, Cookie, xml.dom.minidom
-import xml.etree.ElementTree as ET
 
 # SDK.EC > Default Configuration
 DEFAULT_CONTENT_TYPE = 'text/html;charset=UTF-8'

@@ -52,7 +52,7 @@ print "========================================================================"
 print "Yotsuba Project 2 > Unit Test"
 print "------------------------------------------------------------------------"
 # sdk.xml > Initialization test
-yotsuba.sdk.xml.read("test", "xml-test-1.xml")
+yotsuba.sdk.xml.read("test", "test.xml")
 tEqual("XML Tree Construction", len(yotsuba.sdk.xml.trees['test'].children), 6)
 tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().name(), 'a')
 tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().parent().name(), 'root')
