@@ -2,9 +2,9 @@
 # Yotsuba SDK and Framework
 # Version 2.0 (Developmental)
 # (C) 2007 Juti Noppornpitak <juti_n@yahoo.co.jp>
-# LGPL License
+# License: LGPL
 
-import os, sys, re, dircache, pickle, cgi, hashlib, base64, xml.parsers.expat, Cookie, xml.dom.minidom
+import os, sys, re, dircache, pickle, cgi, hashlib, base64, Cookie, xml.dom.minidom
 
 PROJECT_TITLE = "Yotsuba"
 PROJECT_CODENAME = "Kotoba"
@@ -388,12 +388,7 @@ class YotsubaSDKPackage:
             return self.queriedNodes(resultList)
         
         def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
-            core.log.report('sdk.xml.traverse')
             try:
-                core.log.report(
-                    '%d:%s (Enter)' % (node.level, node.name()),
-                    core.log.codeWatchLevel
-                )
                 rule = self.rule_heirarchy
                 if selectorLevel >= len(selector):
                     return []
@@ -401,10 +396,6 @@ class YotsubaSDKPackage:
                     selectorLevel += 1
                     try:
                         rule = selector[selectorLevel - 1]
-                        core.log.report(
-                            '%d:%s (Special Rule: "%s")' % (node.level, node.name(), rule),
-                            core.log.codeWatchLevel
-                        )
                     except:
                         core.log.report(
                             '%d:%s\n\t|_ Failed to determine the special rule' % (node.level, node.name()),
@@ -417,7 +408,9 @@ class YotsubaSDKPackage:
                         core.log.warningLevel
                     )
                     return []
+		# Makes the selector object
                 s = self.makeSelectorObject(selector[selectorLevel])
+		# First, check if the current element is on the path regardless to the attributes and filtering options
                 isTheNodeOnThePath = \
                     s.name() == '*'\
                     or (
@@ -425,36 +418,39 @@ class YotsubaSDKPackage:
                         and (len(s.attr().keys()) > 0 or len(s.filter()) > 0)
                     )\
                     or s.name() == node.name()
+		# Second, uses attributes to filter out the element that is not qualified.
+		# (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
                 for attrIndex in s.attr().keys():
+		    # Check if the selector requires the element to have this specific attribute `attrIndex`
                     if s.attr(attrIndex)[1] == None:
                         if not node.hasAttr(attrIndex):
                             isTheNodeOnThePath = False
                             break
+	            # Check if the selector requires the element to have this attribute `attrIndex` with
+		    # the specific value.
                     else:
+		        # Annoying check for slipped errors
                         if len(node.attr(attrIndex)) == 0:
                             isTheNodeOnThePath = False
                             break
+			# Then, real check
                         else:
+			    # Get the list of the values, separated by tab character or white spaces.
                             s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
+			    # Check the rules are BROKEN
                             if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
-                            and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                            and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                            and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
-                            and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
-                            and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
+                              and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                              and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                              and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
+                              and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
+                              and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
                                 isTheNodeOnThePath = False
                                 break
-                core.log.report(
-                    '%d:%s > %d\n\t|_Query < %d:%s(%s)' % (node.level, node.name(), len(node.children), selectorLevel, ' '.join(selector), rule),
-                    core.log.codeWatchLevel
-                )
+                            # Otherwise this is on the path
+                            else: pass
                 # Check if this node is on the selector path but not the destination
                 if isTheNodeOnThePath:
                     selectorLevel += 1
-                    core.log.report(
-                        '%d:%s > %d\n\t|_ Query < %d:%s\n\t|_ Found' % (node.level, node.name(), len(node.children), selectorLevel, ' '.join(selector)),
-                        core.log.codeWatchLevel
-                    )
                 # Allocate the memory of the result list
                 resultList = []
                 # Check the rule
