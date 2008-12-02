@@ -390,6 +390,7 @@ class YotsubaSDKPackage:
         def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
             try:
                 rule = self.rule_heirarchy
+                # If there is no selector, return an empty list
                 if selectorLevel >= len(selector):
                     return []
                 if selector[selectorLevel] in self.specialRules:
@@ -408,46 +409,51 @@ class YotsubaSDKPackage:
                         core.log.warningLevel
                     )
                     return []
-		# Makes the selector object
+                # Makes the selector object
                 s = self.makeSelectorObject(selector[selectorLevel])
-		# First, check if the current element is on the path regardless to the attributes and filtering options
+                # First, check if the current element is on the path regardless to the attributes and filtering options
                 isTheNodeOnThePath = \
-                    s.name() == '*'\
-                    or (
-                        s.name() == ''\
-                        and (len(s.attr().keys()) > 0 or len(s.filter()) > 0)
-                    )\
+                    s.name() == '*' \
+                    or ( \
+                        s.name() == '' \
+                        and (len(s.attr().keys()) > 0 or len(s.filter()) > 0) \
+                    ) \
                     or s.name() == node.name()
-		# Second, uses attributes to filter out the element that is not qualified.
-		# (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
+                # Second, uses attributes to filter out the element that is not qualified.
+                # (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
                 for attrIndex in s.attr().keys():
-		    # Check if the selector requires the element to have this specific attribute `attrIndex`
+                    # Check if the selector requires the element to have this specific attribute `attrIndex`
                     if s.attr(attrIndex)[1] == None:
                         if not node.hasAttr(attrIndex):
                             isTheNodeOnThePath = False
                             break
-	            # Check if the selector requires the element to have this attribute `attrIndex` with
-		    # the specific value.
+                    # Check if the selector requires the element to have this attribute `attrIndex` with
+                    # the specific value.
                     else:
-		        # Annoying check for slipped errors
+                        # Annoying check for slipped errors
                         if len(node.attr(attrIndex)) == 0:
                             isTheNodeOnThePath = False
                             break
-			# Then, real check
+                        # Then, real check
                         else:
-			    # Get the list of the values, separated by tab character or white spaces.
+                            # Get the list of the values, separated by tab character or white spaces.
                             s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
-			    # Check the rules are BROKEN
+                            # Check the rules are BROKEN
                             if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
-                              and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                              and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                              and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
-                              and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
-                              and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
+                               and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                               and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                               and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
+                               and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
+                               and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
                                 isTheNodeOnThePath = False
                                 break
                             # Otherwise this is on the path
                             else: pass
+                for filterOption in s.filter():
+                    if filterOption == 'root' and not node.level == 0:
+                        isTheNodeOnThePath = False
+                    elif filterOption == 'empty' and not len(node.children) > 0:
+                        isTheNodeOnThePath = False
                 # Check if this node is on the selector path but not the destination
                 if isTheNodeOnThePath:
                     selectorLevel += 1
@@ -456,10 +462,6 @@ class YotsubaSDKPackage:
                 # Check the rule
                 if rule == self.rule_directDescendant:
                     if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
-                        core.log.report(
-                            '%d:%s (Limit break)' % (node.level, node.name()),
-                            core.log.codeWatchLevel
-                        )
                         return [node]
                     else:
                         core.log.report(
