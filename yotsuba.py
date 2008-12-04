@@ -354,6 +354,7 @@ class YotsubaSDKPackage:
                 )
                 # return nothing if either no treeName or no selector is not a string
                 return []
+            else: pass
             if type(treeName) == str and not self.trees.has_key(treeName):
                 core.log.report(
                     '[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
@@ -361,6 +362,7 @@ class YotsubaSDKPackage:
                 )
                 # return nothing if there is not a tree called by treeName
                 return []
+            else: pass
             # Initialize the list of queried nodes
             resultList = []
             startupNode = None
@@ -374,20 +376,23 @@ class YotsubaSDKPackage:
             queries = selector.split(",")
             for q in queries:
                 # Get the path
-                core.log.report(
-                    'Single Query for %s' % q,
-                    core.log.codeWatchLevel
-                )
                 selectorList = re.split("\ +", q.strip())
                 if len(selectorList) > 0:
                     resultList.extend(self.traverse(startupNode, selectorList))
-            core.log.report(
-                'End of query with %d object(s) found' % len(resultList),
-                core.log.codeWatchLevel
-            )
             return self.queriedNodes(resultList)
         
         def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
+            """
+            Performs querying at the low level on the tree. This function is
+            different from query() that it's querying based on each position.
+            The speed complexity is O(n) where n is the number of nodes.
+            
+            Please notes that this function treats the parameter node as the
+            root of a subtree of its origin.
+            
+            See http://doc.shiroyuki.com/lib/Yotsuba_SDK_XML_Package#def_traverse.28node.2C_selector.2C_selectorLevel.2C_poleNode.2C_singleSiblingSearch.29
+            for the description of parameters
+            """
             try:
                 rule = self.rule_heirarchy
                 # If there is no selector, return an empty list
@@ -404,10 +409,6 @@ class YotsubaSDKPackage:
                         )
                 # If two or more rules are specified consecutively, regards this selector as ill-formatted
                 if selector[selectorLevel] in self.specialRules:
-                    core.log.report(
-                        '%d:%s\n\t|_ Ill-formatted selector' % (node.level, node.name()),
-                        core.log.warningLevel
-                    )
                     return []
                 # Makes the selector object
                 s = self.makeSelectorObject(selector[selectorLevel])
@@ -460,6 +461,7 @@ class YotsubaSDKPackage:
                 # Allocate the memory of the result list
                 resultList = []
                 # Check the rule
+                # Handle a child combinator
                 if rule == self.rule_directDescendant:
                     if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
                         return [node]
@@ -469,80 +471,48 @@ class YotsubaSDKPackage:
                             core.log.codeWatchLevel
                         )
                         return []
+                # Handle a heirarchy combinator
                 elif rule == self.rule_heirarchy:
-                    core.log.report(
-                        '%d:%s (Normal Search)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
-                    )
+                    # If the node is on the path and it is the end of the path
                     if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
+                        # If the last element required on the path is a wild card,
+                        # keeps the iterator going to the bottom of the tree.
                         if self.makeSelectorObject(selector[-1]).name() == '*':
                             selectorLevel -= 1
-                            core.log.report(
-                                '%d:%s (Limit pull-back)' % (node.level, node.name()),
-                                core.log.codeWatchLevel
-                            )
-                        else:
-                            core.log.report(
-                                '%d:%s (Limit break)' % (node.level, node.name()),
-                                core.log.codeWatchLevel
-                            )
+                        else: pass
                         resultList.append(node)
                     cnodeIndex = -1
                     doSkip = True
                     for cnode in node.children:
                         cnodeIndex += 1
+                        # This is the last node to be skipped based on the poleNode.
                         if poleNode and poleNode.name() == cnode.name() and poleNode.level == cnode.level:
-                            core.log.report(
-                                '%d:%s (Recursive Search LAST SKIPPED - %s)' % (cnode.level, cnode.name(), poleNode.name()),
-                                core.log.codeWatchLevel
-                            )
                             doSkip = False
                             continue
+                        # Skips if this node comes before the poleNode.
                         if poleNode and doSkip:
-                            core.log.report(
-                                '%d:%s (Recursive Search SKIPPED - %s)' % (cnode.level, cnode.name(), poleNode.name()),
-                                core.log.codeWatchLevel
-                            )
                             continue
+                        # If this is the single sibling search, skips the next
+                        # sibling until it meets the criteria.
                         if singleSiblingSearch:
                             doSkip = True
-                        core.log.report(
-                            '%d:%s (Recursive Search)' % (cnode.level, cnode.name()),
-                            core.log.codeWatchLevel
-                        )
+                        # Adds the child node to the result list
                         resultList.extend(self.traverse(cnode, selector, selectorLevel))
                     return resultList
+                # Handles an adjacent sibling combinator (get one next sibling)
                 elif rule == self.rule_matchOneNextSibling:
-                    core.log.report(
-                        '%d:%s (Single Sibling Search -- Start)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
-                    )
                     resultList.extend(
                         self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
                     )
-                    core.log.report(
-                        '%d:%s (Single Sibling Search -- End)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
-                    )
                     return resultList
+                # Handles a general sibling combinator (get all next siblings)
                 elif rule == self.rule_matchAllNextSiblings:
-                    core.log.report(
-                        '%d:%s (Multiple Sibling Search -- Start)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
-                    )
                     resultList.extend(
                         self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
                     )
-                    core.log.report(
-                        '%d:%s (Multiple Sibling Search -- End)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
-                    )
                     return resultList
+                # No rule applied
                 else:
-                    core.log.report(
-                        '%d:%s (No iteration)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
-                    )
                     return []
             except:
                 core.log.report(
