@@ -4,7 +4,11 @@
 # (C) 2007 Juti Noppornpitak <juti_n@yahoo.co.jp>
 # License: LGPL
 
+# For testing features
 import os, sys, re, dircache, pickle, cgi, hashlib, base64, Cookie, xml.dom.minidom
+
+# For experimental features
+import thread, threading
 
 PROJECT_TITLE = "Yotsuba"
 PROJECT_CODENAME = "Kotoba"
@@ -20,12 +24,12 @@ DEFAULT_CONTENT_TYPE = 'text/html;charset=UTF-8'
 DEFAULT_PATH_TO_SESSION_STORAGE = 'sessions/'
 
 # SDK.FS > Common Definitions
-FILE        = 0
-DIRECTORY    = 1
-LINK        = 2
-READ_NORMAL    = 'r'
-READ_BINARY    = 'rb'
-READ_PICKLE    = 'pickle::read'
+FILE            = 0
+DIRECTORY       = 1
+LINK            = 2
+READ_NORMAL     = 'r'
+READ_BINARY     = 'rb'
+READ_PICKLE     = 'pickle::read'
 WRITE_NORMAL    = 'w'
 WRITE_BINARY    = 'wb'
 WRITE_PICKLE    = 'pickle::write'
@@ -222,15 +226,19 @@ class YotsubaCorePackage:
     class log:
         # Local configuration
         maxAllowedLevel = 2
-        # Definitions
+        # Flags
         noticeLevel = 0
         warningLevel = 1
         errorLevel = 2
         codeWatchLevel = 3
         # Storage
         logs = []
+        # Indicator
+        hasError = False
         
         def report(self, content, level = 0):
+            if level == self.errorLevel:
+                self.hasError = True
             self.logs.append(self.logObject(content, level))
         def export(self, level = -1, onlyOneLevel = False, toArray = False):
             """
@@ -299,16 +307,23 @@ class YotsubaSDKPackage:
         
         This is a prototype.
         """
-        rule_heirarchy = ' '
-        rule_directDescendant = '>'
-        rule_matchOneNextSibling = '+'
-        rule_matchAllNextSiblings = '~'
+        rule_descendantCombinator = ' '
+        rule_childCombinator = '>'
+        rule_adjacentSiblingCombinator = '+'
+        rule_generalSiblingCombinator = '~'
         specialRules = [
-            rule_directDescendant,
-            rule_matchOneNextSibling,
-            rule_matchAllNextSiblings
+            rule_childCombinator,
+            rule_adjacentSiblingCombinator,
+            rule_generalSiblingCombinator
         ]
         trees = {}
+        locks = {}
+        runningThreads = {}
+        exitedThreads = {}
+        sharedMemory = {}
+        
+        def __init__(self):
+            self.locks['referencing'] = thread.allocate_lock()
         
         def read(self, treeName, source):
             """
@@ -346,15 +361,17 @@ class YotsubaSDKPackage:
             return True
         
         def query(self, treeName, selector):
-            core.log.report('sdk.xml.query')
-            if not type(selector) == str:
+            # If `treeName` and `selector` are not of type string, returns an empty list.
+            if not type(selector) == str or  not type(treeName) == str:
                 core.log.report(
                     '[sdk.xml.query] unexpected types of treeName and selector',
                     core.log.warningLevel
                 )
                 # return nothing if either no treeName or no selector is not a string
                 return []
-            else: pass
+            else:
+                pass
+            # If there is no reference to the tree named by `treeName`, return an empty list.
             if type(treeName) == str and not self.trees.has_key(treeName):
                 core.log.report(
                     '[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
@@ -362,24 +379,87 @@ class YotsubaSDKPackage:
                 )
                 # return nothing if there is not a tree called by treeName
                 return []
-            else: pass
-            # Initialize the list of queried nodes
+            else:
+                pass
+            # Creates a selector reference
+            selectorReference = sdk.crypt.hash(selector, ['md5'])
+            # Initializes the list of queried nodes
             resultList = []
+            self.sharedMemory[selectorReference] = []
+            # Gets the reference to the root node
             startupNode = None
             try:
                 startupNode = self.trees[treeName]
             except:
                 startupNode = treeName
-            # Query cleanup (Clear out the tab character)
+            # Queries cleanup (Clear out the tab character)
             selector = re.sub("\t", " ", selector)
-            # Engroup
-            queries = selector.split(",")
-            for q in queries:
-                # Get the path
-                selectorList = re.split("\ +", q.strip())
-                if len(selectorList) > 0:
-                    resultList.extend(self.traverse(startupNode, selectorList))
+            # Engroups
+            queries = re.split("\,", selector)
+            # Allocates for a locks
+            self.locks[selectorReference] = thread.allocate_lock()
+            self.locks[selectorReference].acquire()
+            self.runningThreads[selectorReference] = []
+            self.exitedThreads[selectorReference] = []
+            for query in queries:
+                # [Locked]
+                if query in self.runningThreads[selectorReference]:
+                    continue
+                self.runningThreads[selectorReference].append(query)
+                thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query))
+            self.locks[selectorReference].acquire()
+            resultList = self.sharedMemory[selectorReference]
+            self.locks[selectorReference].release()
+            self.locks['referencing'].acquire()
+            while self.locks[selectorReference].locked():
+                pass
+            core.log.report(
+                "Removed reference [%s]" % selectorReference,
+                core.log.warningLevel
+            )
+            del self.sharedMemory[selectorReference]
+            del self.runningThreads[selectorReference]
+            del self.exitedThreads[selectorReference]
+            del self.locks[selectorReference]
+            try:
+                self.locks['referencing'].release()
+            except:
+                print "Removing referencing denied"
             return self.queriedNodes(resultList)
+        
+        def queryWithOneSelector(self, selectorReference, startupNode, query):
+            # Get the path
+            combination = re.split("\ +", query.strip())
+            if len(combination) > 0:
+                try:
+                    self.sharedMemory[selectorReference].extend(
+                        self.traverse(startupNode, combination)
+                    )
+                    self.exitedThreads[selectorReference].append(query)
+                except:
+                    core.log.report(
+                        "Shared Memory [%s] not available" % selectorReference,
+                        core.log.errorLevel
+                    )
+                if not selectorReference in self.runningThreads:
+                    thread.exit()
+                if len(self.runningThreads[selectorReference]) == len(self.exitedThreads[selectorReference]):
+                    core.log.report(
+                        "Unlocked [%s]" % selectorReference,
+                        core.log.warningLevel
+                    )
+                    try:
+                        self.locks[selectorReference].release()
+                    except:
+                        core.log.report(
+                            "Lock [%s] already released" % selectorReference,
+                            core.log.errorLevel
+                        )
+            else:
+                core.log.report(
+                    "No operation [%s]" % selectorReference,
+                    core.log.errorLevel
+                )
         
         def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
             """
@@ -394,7 +474,7 @@ class YotsubaSDKPackage:
             for the description of parameters
             """
             try:
-                rule = self.rule_heirarchy
+                rule = self.rule_descendantCombinator
                 # If there is no selector, return an empty list
                 if selectorLevel >= len(selector):
                     return []
@@ -453,7 +533,7 @@ class YotsubaSDKPackage:
                 for filterOption in s.filter():
                     if filterOption == 'root' and not node.level == 0:
                         isTheNodeOnThePath = False
-                    elif filterOption == 'empty' and not len(node.children) > 0:
+                    elif filterOption == 'empty' and (len(node.children) > 0 or node.data()):
                         isTheNodeOnThePath = False
                 # Check if this node is on the selector path but not the destination
                 if isTheNodeOnThePath:
@@ -462,7 +542,7 @@ class YotsubaSDKPackage:
                 resultList = []
                 # Check the rule
                 # Handle a child combinator
-                if rule == self.rule_directDescendant:
+                if rule == self.rule_childCombinator:
                     if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
                         return [node]
                     else:
@@ -472,7 +552,7 @@ class YotsubaSDKPackage:
                         )
                         return []
                 # Handle a heirarchy combinator
-                elif rule == self.rule_heirarchy:
+                elif rule == self.rule_descendantCombinator:
                     # If the node is on the path and it is the end of the path
                     if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
                         # If the last element required on the path is a wild card,
@@ -500,13 +580,13 @@ class YotsubaSDKPackage:
                         resultList.extend(self.traverse(cnode, selector, selectorLevel))
                     return resultList
                 # Handles an adjacent sibling combinator (get one next sibling)
-                elif rule == self.rule_matchOneNextSibling:
+                elif rule == self.rule_adjacentSiblingCombinator:
                     resultList.extend(
                         self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
                     )
                     return resultList
                 # Handles a general sibling combinator (get all next siblings)
-                elif rule == self.rule_matchAllNextSiblings:
+                elif rule == self.rule_generalSiblingCombinator:
                     resultList.extend(
                         self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
                     )
@@ -754,9 +834,11 @@ class YotsubaSDKPackage:
     class crypt:
         cryptographic_depth_level = 10
 
-        def hash(self, text):
+        def hash(self, text, hashPackage = None):
             rstring = ''
             hashdict = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'ripemd160']
+            if hashPackage:
+                hashdict = hashPackage
             for hashalg in hashdict:
                 m = hashlib.new(hashalg)
                 m.update(text)
@@ -872,7 +954,11 @@ class YotsubaFWPackage:
                         self.headers[key] = value
                     return self.headers[key]
                 except:
-                    core.log.report("[fw.ec.header] failed to retrieve a value of header %s" % key, core.log.warningLevel)
+                    core.log.report(
+                        "[fw.ec.header] failed to retrieve a value of header %s"\
+                        % key,
+                        core.log.warningLevel
+                    )
             else:
                 lines = []
                 for k, v in headers.iteritems():
@@ -1047,6 +1133,34 @@ class YotsubaFWPackage:
 class YotsubaCore:
     fs = YotsubaCorePackage.fs()
     log = YotsubaCorePackage.log()
+    
+    testBiggerLock = thread.allocate_lock()
+    testLock = thread.allocate_lock()
+    enter = []
+    exit = []
+    x = 0
+    
+    def multiThreadTest(self):
+        self.testBiggerLock.acquire()
+        print "Checkpoint 1"
+        for i in range(200):
+            thread.start_new(self.counter, (i,))
+        print "Checkpoint 2"
+        self.testBiggerLock.release()
+        self.testBiggerLock.acquire()
+        print "Checkpoint 3"
+        print self.x
+        print self.enter
+        print self.exit
+        print "Checkpoint 4"
+        self.testBiggerLock.release()
+        
+    def counter(self, i):
+        print "Run ", i
+        self.enter.append(i)
+        for j in range(200):
+            self.x = i * j
+        self.exit.append(i)
 
 class YotsubaSDK:
     crypt = YotsubaSDKPackage.crypt()
@@ -1061,3 +1175,8 @@ class YotsubaFW:
 core = YotsubaCore()
 sdk = YotsubaSDK()
 fw = YotsubaFW()
+
+if __name__ == '__main__':
+    #core.multiThreadTest();
+    print PROJECT_SIGNATURE
+    
