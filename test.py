@@ -196,8 +196,11 @@ if __name__ == '__main__':
     print "    Average\t\t%.5f\tsecond(s)" % getAverage(t_stat)
     print "    Minimum\t\t%.5f\tsecond(s)" % getMin(t_stat)
     print "    Maximum\t\t%.5f\tsecond(s)" % getMax(t_stat)
-    print "    Improvement\t\t%.2f\t%%" % (( getAverage(t_currentStat) - getAverage(t_stat) ) / getAverage(t_stat) * 100)
-    print "    Probability\t\t%.2f\t%%" % (( getAverage(t_currentStat) - getMin(t_stat) ) / ( getMax(t_stat) - getMin(t_stat) ) * 100)
+    print "    Improvement\t\t%.2f\t%%" % (( getAverage(t_stat) - getAverage(t_currentStat) ) / getAverage(t_stat) * 100)
+    print "    Potential\t\t%.2f\t%%\t%.2f\t%%" % (
+        (( 1 - (getAverage(t_currentStat) - getMin(t_stat) ) / ( getMax(t_stat) - getMin(t_stat) ) ) * 100),
+        (( 1 - (getAverage(t_stat) - getMin(t_stat) ) / ( getMax(t_stat) - getMin(t_stat) ) ) * 100),
+    )
     print "    Total tests\t\t%d\ttests" % (len(t_stat))
     # End of calls
     
