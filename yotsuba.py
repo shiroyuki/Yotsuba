@@ -492,49 +492,60 @@ class YotsubaSDKPackage:
                     return []
                 # Makes the selector object
                 s = self.makeSelectorObject(selector[selectorLevel])
-                # First, check if the current element is on the path regardless to the attributes and filtering options
+                # First, check if the current element is on the path regardless to the attributes and some filtering options
                 isTheNodeOnThePath = \
-                    s.name() == '*' \
-                    or ( \
+                    ( \
+                        s.name() == '*' \
+                    ) or ( \
                         s.name() == '' \
-                        and (len(s.attr().keys()) > 0 or len(s.filter()) > 0) \
-                    ) \
-                    or s.name() == node.name()
+                        and ( \
+                            len(s.attr().keys()) > 0 \
+                            or len(s.filter()) > 0 \
+                        ) \
+                    ) or ( \
+                        s.name() == node.name() \
+                    )
                 # Second, uses attributes to filter out the element that is not qualified.
                 # (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
-                for attrIndex in s.attr().keys():
-                    # Check if the selector requires the element to have this specific attribute `attrIndex`
-                    if s.attr(attrIndex)[1] == None:
-                        if not node.hasAttr(attrIndex):
-                            isTheNodeOnThePath = False
-                            break
-                    # Check if the selector requires the element to have this attribute `attrIndex` with
-                    # the specific value.
-                    else:
-                        # Annoying check for slipped errors
-                        if len(node.attr(attrIndex)) == 0:
-                            isTheNodeOnThePath = False
-                            break
-                        # Then, real check
-                        else:
-                            # Get the list of the values, separated by tab character or white spaces.
-                            s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
-                            # Check the rules are BROKEN
-                            if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
-                               and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                               and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                               and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
-                               and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
-                               and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
+                if isTheNodeOnThePath:
+                    for attrIndex in s.attr().keys():
+                        # Check if the selector requires the element to have this specific attribute `attrIndex`
+                        if s.attr(attrIndex)[1] == None:
+                            if not node.hasAttr(attrIndex):
                                 isTheNodeOnThePath = False
                                 break
-                            # Otherwise this is on the path
-                            else: pass
-                for filterOption in s.filter():
-                    if filterOption == 'root' and not node.level == 0:
-                        isTheNodeOnThePath = False
-                    elif filterOption == 'empty' and (len(node.children) > 0 or node.data()):
-                        isTheNodeOnThePath = False
+                        # Check if the selector requires the element to have this attribute `attrIndex` with
+                        # the specific value.
+                        else:
+                            # Annoying check for slipped errors
+                            if len(node.attr(attrIndex)) == 0:
+                                isTheNodeOnThePath = False
+                                break
+                            # Then, real check
+                            else:
+                                # Get the list of the values, separated by tab character or white spaces.
+                                s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
+                                # Check the rules are BROKEN
+                                if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
+                                   and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                                   and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                                   and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
+                                   and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
+                                   and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
+                                    isTheNodeOnThePath = False
+                                    break
+                                # Otherwise this is on the path
+                                else:
+                                    pass
+                # Third, check the filters
+                if isTheNodeOnThePath:
+                    for filterOption in s.filter():
+                        if filterOption == 'root' and not node.level == 0:
+                            isTheNodeOnThePath = False
+                            break
+                        elif filterOption == 'empty' and (len(node.children) > 0 or node.data()):
+                            isTheNodeOnThePath = False
+                            break
                 # Check if this node is on the selector path but not the destination
                 if isTheNodeOnThePath:
                     selectorLevel += 1
@@ -731,7 +742,6 @@ class YotsubaSDKPackage:
             hash = None
             
             def __init__(self, element, parent = None, level = 0, levelIndex = 0):
-                core.log.report('%d:%s > Constructed' % (level, element.tagName), core.log.codeWatchLevel)
                 self.level = level
                 self.element = element
                 self.children = []
@@ -832,8 +842,14 @@ class YotsubaSDKPackage:
                 return self.SOFilters
 
     class crypt:
-        cryptographic_depth_level = 10
-
+        cryptographicDepthLevel = 10
+        
+        def serialise(self, dataObject):
+            return pickle.dumps(dataObject, pickle.HIGHEST_PROTOCOL)
+        
+        def revertSerialise(self, serialisedData):
+            return pickle.loads(serialisedData)
+        
         def hash(self, text, hashPackage = None):
             rstring = ''
             hashdict = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'ripemd160']
@@ -847,13 +863,13 @@ class YotsubaSDKPackage:
 
         def encrypt(self, text):
             rstring = text
-            for loopindex in range(0, self.cryptographic_depth_level):
+            for loopindex in range(0, self.cryptographicDepthLevel):
                 rstring = base64.b64encode(rstring)
             return rstring
 
         def decrypt(self, text):
             rstring = text
-            for loopindex in range(0, self.cryptographic_depth_level):
+            for loopindex in range(0, self.cryptographicDepthLevel):
                 rstring = base64.b64decode(rstring)
             return rstring
 
@@ -885,13 +901,73 @@ class YotsubaSDKPackage:
             return content
 
     class mail:
-        DEFAULT_MESSAGE_SUBJECT = 'Untitled Message'
+        defaultMessageSubject = 'Untitled Message'
         re_validEmailAddress = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
-
+        connectionNodes = {}
+        
         def validateEmailAddress(self, emailAddr):
             return not self.re_validEmailAddress.match(emailAddr) == None
-
-        class message:
+        
+        def createConnection(self, linkName):
+            if self.connectionNodes.has_key(linkName):
+                return False
+            else:
+                self.connectionNodes[linkName] = self.Connection()
+                return True
+        
+        def removeConnection(self, linkName):
+            if self.connectionNodes.has_key(linkName):
+                del self.connectionNodes[linkName]
+                return True
+            else:
+                return False
+        
+        def connection(self, linkName):
+            self.createConnection(linkName)
+            return self.connectionNodes[linkName]
+        
+        class Conenction:
+            defaultOption = {
+                "used":     False,
+                "server":   None,
+                "type":     None,
+                "port":     None,
+                "secure":   None
+            }
+            
+            options = {
+                "in": None,
+                "out": None
+            }
+            
+            def __init__(self, enableReceiving = False, enableSending = False):
+                if enableReceiving:
+                    self.options["in"] = self.defaultOption.copy()
+                if enableSending:
+                    self.options["out"] = self.defaultOption.copy()
+            
+            def configure(self, key, newValue = None):
+                if self.options.has_key(key):
+                    if not newValue == None:
+                        options[key] = newValue
+                    return options[key]
+                return None
+            
+            def transmit(self, message = None):
+                if not message == None:
+                    # Sends the message
+                    pass
+                else:
+                    # Receives the messages
+                    pass
+            
+            def connect(self):
+                pass
+            
+            def disconnect(self):
+                pass
+        
+        class Message:
             data = {
                 'from':        '',
                 'to':        '',
@@ -917,7 +993,7 @@ class YotsubaSDKPackage:
                             ableToSave = False
                             break
                 elif key.strip() == 'subject':
-                    ableToSave = not value.strip() == DEFAULT_MESSAGE_SUBJECT
+                    ableToSave = not value.strip() == defaultMessageSubject
                 else: # body
                     ableToSave = not value.strip() == ''
                 if ableToSave:
