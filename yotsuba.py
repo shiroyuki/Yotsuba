@@ -5,7 +5,7 @@
 # License: LGPL
 
 # For testing features
-import os, sys, re, dircache, pickle, cgi, hashlib, base64, Cookie, xml.dom.minidom
+import os, sys, re, dircache, pickle, cgi, hashlib, base64, Cookie, xml.dom.minidom, poplib, imaplib
 
 # For experimental features
 import thread, threading
@@ -908,64 +908,96 @@ class YotsubaSDKPackage:
         def validateEmailAddress(self, emailAddr):
             return not self.re_validEmailAddress.match(emailAddr) == None
         
-        def createConnection(self, linkName):
-            if self.connectionNodes.has_key(linkName):
-                return False
-            else:
-                self.connectionNodes[linkName] = self.Connection()
-                return True
-        
-        def removeConnection(self, linkName):
-            if self.connectionNodes.has_key(linkName):
-                del self.connectionNodes[linkName]
-                return True
-            else:
-                return False
-        
-        def connection(self, linkName):
-            self.createConnection(linkName)
-            return self.connectionNodes[linkName]
-        
-        class Conenction:
-            defaultOption = {
-                "used":     False,
-                "server":   None,
-                "type":     None,
-                "port":     None,
-                "secure":   None
-            }
+        class MailReceiver:
+            _username = None
+            _password = None
+            _port = None
+            _server = None
+            receiver = None
+            isIMAP = False
+            _SSLEnabled = False
             
-            options = {
-                "in": None,
-                "out": None
-            }
-            
-            def __init__(self, enableReceiving = False, enableSending = False):
-                if enableReceiving:
-                    self.options["in"] = self.defaultOption.copy()
-                if enableSending:
-                    self.options["out"] = self.defaultOption.copy()
-            
-            def configure(self, key, newValue = None):
-                if self.options.has_key(key):
-                    if not newValue == None:
-                        options[key] = newValue
-                    return options[key]
-                return None
-            
-            def transmit(self, message = None):
-                if not message == None:
-                    # Sends the message
-                    pass
-                else:
-                    # Receives the messages
-                    pass
-            
-            def connect(self):
+            def __init__(self, server, port = None, SSLEnabled = False):
+                self.server(server)
+                self.port(port)
+                self.enableSSL(SSLEnabled)
                 pass
+            
+            def server(self, server = None):
+                if server is not None:
+                    self._server = server
+                return self._server
+            
+            def port(self, port = None):
+                if port is not None:
+                    self._port = port
+                return self._port
+            
+            def SSLEnabled(self, enable = None):
+                if enable is not None:
+                    self._SSLEnabled = enable
+                return self._SSLEnabled
+            
+            def username(self, username = None):
+                if username is not None:
+                    self._username = username
+                return self._username
+            
+            def password(self, password = None):
+                if password is not None:
+                    self._password = password
+                return self._password
+            
+            def usePOP(self):
+                if self.port() is None:
+                    if self.SSLEnabled():
+                        self.receiver = poplib.POP3_SSL(self.server())
+                    else:
+                        self.receiver = poplib.POP3(self.server())
+                    self.isIMAP = False
+                else:
+                    if type(self.port()) is int:
+                        self.receiver = poplib.POP3(self.server(), self.port())
+                        self.isIMAP = False
+                    else:
+                        pass
+            
+            def useIMAP(self):
+                if self.port() is None:
+                    if self.SSLEnabled():
+                        self.receiver = imaplib.IMAP4_SSL(self.server())
+                    else:
+                        self.receiver = imaplib.IMAP4(self.server())
+                    self.isIMAP = True
+                else:
+                    if type(self.port()) is int:
+                        self.receiver = imaplib.IMAP4(self.server(), self.port())
+                        self.isIMAP = True
+                    else:
+                        pass
+            
+            def connect(self, username = None, password = None):
+                if username is not None:
+                    self.username(username)
+                if password is not None:
+                    self.password(password)
+                try:
+                    if self.isIMAP:
+                        self.receiver.login(self.username(), self.password())
+                    else:
+                        self.receiver.user(self.username())
+                        self.receiver.pass_(self.password())
+                except Exception, e:
+                    core.log.report(e, core.log.errorLevel)
             
             def disconnect(self):
-                pass
+                if self.isIMAP:
+                    self.receiver.logout()
+                else:
+                    self.receiver.quit()
+            
+            def getListOfMessages(self):
+                return []
         
         class Message:
             data = {
