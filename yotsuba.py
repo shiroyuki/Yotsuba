@@ -1074,6 +1074,13 @@ class YotsubaSDKPackage:
                             self.data['subject'] = self.headers['subject']
                         else:
                             self.data['subject'] = "Untitled Message"
+                            
+                        self.data['charset'] = "UTF-8"
+                        
+                        if self.data['PContent'].is_multipart():
+                            for mpart in self.data['PContent'].walk():
+                                if mpart.get_content_maintype() in ['multipart', 'message']:
+                                    continue
     
                 def attr(self, key = '', value = ''):
                     ableToSave = False
