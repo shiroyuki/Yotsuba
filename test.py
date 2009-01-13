@@ -121,7 +121,6 @@ def testingProcedure():
         'e > e1 common': 1,
         'd common': 0,
         'c c1, e e11': 2,
-        'root common[name=c]:not': 3
     }
     for pqK, pqV in passedQueries.iteritems():
         tEqual("XML Query Test / Correctness (%s)" % pqK, yotsuba.sdk.xml.query('test', pqK).length(), pqV)

@@ -5,7 +5,10 @@
 # License: LGPL
 
 # For testing features
-import os, sys, re, dircache, pickle, cgi, hashlib, base64, Cookie, xml.dom.minidom, poplib, imaplib
+import os, sys, re, dircache, pickle, hashlib, base64, xml.dom.minidom
+import cgi, Cookie
+import mimetypes
+import email, poplib, imaplib
 
 # For experimental features
 import thread, threading
@@ -915,12 +918,14 @@ class YotsubaSDKPackage:
             _server = None
             receiver = None
             isIMAP = False
+            _messages = None
             _SSLEnabled = False
             
             def __init__(self, server, port = None, SSLEnabled = False):
                 self.server(server)
                 self.port(port)
                 self.enableSSL(SSLEnabled)
+                self._messages = []
                 pass
             
             def server(self, server = None):
@@ -991,56 +996,115 @@ class YotsubaSDKPackage:
                     core.log.report(e, core.log.errorLevel)
             
             def disconnect(self):
-                if self.isIMAP:
-                    self.receiver.logout()
-                else:
-                    self.receiver.quit()
-            
-            def getListOfMessages(self):
-                return []
-        
-        class Message:
-            data = {
-                'from':        '',
-                'to':        '',
-                'cc':        '',
-                'bcc':        '',
-                'subject':    '',
-                'body':        ''
-            }
-
-            files = [] # attachment
-
-            def attr(self, key = '', value = ''):
-                ableToSave = False
-                if key.strip() == 'from':
-                    ableToSave = not value.strip() == '' and YotsubaSDKPackage.mail.validateEmailAddress(value.strip())
-                elif key.strip() == 'to' or key.strip() == 'cc' or key.strip() == 'bcc':
-                    receivers = value.split(',')
-                    for receiver in receivers:
-                        if receiver.strip() == '':
-                            continue
-
-                        if not YotsubaSDKPackage.mail.validateEmailAddress(receiver.strip()):
-                            ableToSave = False
-                            break
-                elif key.strip() == 'subject':
-                    ableToSave = not value.strip() == defaultMessageSubject
-                else: # body
-                    ableToSave = not value.strip() == ''
-                if ableToSave:
-                    self.data[key] = value.strip()
-                return self.data[key]
-
-            def save(self, filename):
                 try:
-                    return YotsubaSDKPackage.fs.write(filename, data, WRITE_PICKLE)
+                    if self.isIMAP:
+                        self.receiver.logout()
+                    else:
+                        self.receiver.quit()
+                    del self._messages
+                    self._messages = []
+                    return True
                 except:
                     return False
-
-            def send(self):
-                if data['from'] == '' or data['to'] == '':
-                    return False
+            
+            def getNumberOfMessages(self):
+                try:
+                    if self.isIMAP:
+                        return 0
+                    else:
+                        return self.receiver.stat()[0]
+                except:
+                    return -1
+            
+            def getSizeOfMailbox(self):
+                try:
+                    if self.isIMAP:
+                        return 0
+                    else:
+                        return self.receiver.stat()[1]
+                except:
+                    return -1
+            
+            def getMessage(self, messageID, numberOfLines = 0):
+                message = None
+                if self.isIMAP:
+                    # Not currently supported
+                    return None
+                else:
+                    if numberOfLines < 1:
+                        message = self.receiver.top(messageID, numberOfLines)
+                    else:
+                        message = self.receiver.retr(messageID)
+                
+                message = self.Message(message, self.isIMAP)
+                
+                return message
+        
+            class Message:
+                headers = {}
+                
+                data = {
+                    'reponse':  '',
+                    'from':     '',
+                    'to':       '',
+                    'cc':       '',
+                    'bcc':      '',
+                    'subject':  '',
+                    'OContent': [], # Original Content
+                    'PContent': [], # Processed Content
+                    'size':     0
+                }
+    
+                files = [] # attachment
+                
+                def __init__(self, messageContent, receivedViaIMAP = False):
+                    if receivedViaIMAP:
+                        self.data['response'] = messageContent[0]
+                        self.data['OContent'] = messageContent[1]
+                        self.data['PContent'] = email.message_from_string('\n'.join(messageContent[1]))
+                        self.data['size'] = int(messageContent[2])
+                        
+                        for PContentKey in self.data['PContent'].keys():
+                            if self.headers.has_key(PContentKey.lower()):
+                                self.headers[PContentKey.lower()] += " %s" % value
+                            else:
+                                self.headers[PContentKey.lower()] = "%s" % value
+                        
+                        if "subject" in self.headers.keys():
+                            self.data['subject'] = self.headers['subject']
+                        else:
+                            self.data['subject'] = "Untitled Message"
+    
+                def attr(self, key = '', value = ''):
+                    ableToSave = False
+                    if key.strip() == 'from':
+                        ableToSave = not value.strip() == '' and YotsubaSDKPackage.mail.validateEmailAddress(value.strip())
+                    elif key.strip() == 'to' or key.strip() == 'cc' or key.strip() == 'bcc':
+                        receivers = value.split(',')
+                        for receiver in receivers:
+                            if receiver.strip() == '':
+                                continue
+    
+                            if not YotsubaSDKPackage.mail.validateEmailAddress(receiver.strip()):
+                                ableToSave = False
+                                break
+                    elif key.strip() == 'subject':
+                        ableToSave = not value.strip() == defaultMessageSubject
+                    else: # body
+                        ableToSave = not value.strip() == ''
+                    if ableToSave:
+                        self.data[key] = value.strip()
+                    return self.data[key]
+    
+                def save(self, filename):
+                    try:
+                        return YotsubaSDKPackage.fs.write(filename, data, WRITE_PICKLE)
+                    except:
+                        return False
+    
+                def send(self):
+                    if data['from'] == '' or data['to'] == '':
+                        return False
 
 class YotsubaFWPackage:
     class ec:
