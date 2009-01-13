@@ -1077,6 +1077,7 @@ class YotsubaSDKPackage:
                             
                         self.data['charset'] = "UTF-8"
                         
+                        #### Continue the message processing here (http://pub.shiroyuki.com/share/CalleThread.py)
                         if self.data['PContent'].is_multipart():
                             for mpart in self.data['PContent'].walk():
                                 if mpart.get_content_maintype() in ['multipart', 'message']:
