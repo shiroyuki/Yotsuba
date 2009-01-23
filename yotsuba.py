@@ -5,10 +5,15 @@
 # License: LGPL
 
 # For testing features
-import os, sys, re, dircache, pickle, hashlib, base64, xml.dom.minidom
+import os, sys, re, dircache
+import StringIO
+import hashlib, base64
+import xml.dom.minidom
+import cPickle
+import pickle
 import cgi, Cookie
-import mimetypes
-import email, poplib, imaplib
+import mimetypes, MimeWriter
+import email, poplib, imaplib, smtplib
 
 # For experimental features
 import thread, threading
@@ -171,7 +176,7 @@ class YotsubaCorePackage:
                 # use pickle for reading
                 if not self.size(filename) > 0:
                     return None
-                data = pickle.load(open(filename, 'rb'))
+                data = cPickle.load(open(filename, 'rb'))
                 return data
 
             # This part does not use pickle.
@@ -199,7 +204,7 @@ class YotsubaCorePackage:
                 #    os.unlink(filename)
                 try:
                     fp = open(filename, 'wb')
-                    pickle.dump(data, fp)
+                    cPickle.dump(data, fp)
                     fp.close()
                     return True
                 except:
@@ -848,10 +853,10 @@ class YotsubaSDKPackage:
         cryptographicDepthLevel = 10
         
         def serialise(self, dataObject):
-            return pickle.dumps(dataObject, pickle.HIGHEST_PROTOCOL)
+            return cPickle.dumps(dataObject, pickle.HIGHEST_PROTOCOL)
         
         def revertSerialise(self, serialisedData):
-            return pickle.loads(serialisedData)
+            return cPickle.loads(serialisedData)
         
         def hash(self, text, hashPackage = None):
             rstring = ''
@@ -911,208 +916,6 @@ class YotsubaSDKPackage:
         def validateEmailAddress(self, emailAddr):
             return not self.re_validEmailAddress.match(emailAddr) == None
         
-        class MailReceiver:
-            _username = None
-            _password = None
-            _port = None
-            _server = None
-            receiver = None
-            isIMAP = False
-            _messages = None
-            _SSLEnabled = False
-            
-            def __init__(self, server, port = None, SSLEnabled = False):
-                self.server(server)
-                self.port(port)
-                self.enableSSL(SSLEnabled)
-                self._messages = []
-                pass
-            
-            def server(self, server = None):
-                if server is not None:
-                    self._server = server
-                return self._server
-            
-            def port(self, port = None):
-                if port is not None:
-                    self._port = port
-                return self._port
-            
-            def SSLEnabled(self, enable = None):
-                if enable is not None:
-                    self._SSLEnabled = enable
-                return self._SSLEnabled
-            
-            def username(self, username = None):
-                if username is not None:
-                    self._username = username
-                return self._username
-            
-            def password(self, password = None):
-                if password is not None:
-                    self._password = password
-                return self._password
-            
-            def usePOP(self):
-                if self.port() is None:
-                    if self.SSLEnabled():
-                        self.receiver = poplib.POP3_SSL(self.server())
-                    else:
-                        self.receiver = poplib.POP3(self.server())
-                    self.isIMAP = False
-                else:
-                    if type(self.port()) is int:
-                        self.receiver = poplib.POP3(self.server(), self.port())
-                        self.isIMAP = False
-                    else:
-                        pass
-            
-            def useIMAP(self):
-                if self.port() is None:
-                    if self.SSLEnabled():
-                        self.receiver = imaplib.IMAP4_SSL(self.server())
-                    else:
-                        self.receiver = imaplib.IMAP4(self.server())
-                    self.isIMAP = True
-                else:
-                    if type(self.port()) is int:
-                        self.receiver = imaplib.IMAP4(self.server(), self.port())
-                        self.isIMAP = True
-                    else:
-                        pass
-            
-            def connect(self, username = None, password = None):
-                if username is not None:
-                    self.username(username)
-                if password is not None:
-                    self.password(password)
-                try:
-                    if self.isIMAP:
-                        self.receiver.login(self.username(), self.password())
-                    else:
-                        self.receiver.user(self.username())
-                        self.receiver.pass_(self.password())
-                except Exception, e:
-                    core.log.report(e, core.log.errorLevel)
-            
-            def disconnect(self):
-                try:
-                    if self.isIMAP:
-                        self.receiver.logout()
-                    else:
-                        self.receiver.quit()
-                    del self._messages
-                    self._messages = []
-                    return True
-                except:
-                    return False
-            
-            def getNumberOfMessages(self):
-                try:
-                    if self.isIMAP:
-                        return 0
-                    else:
-                        return self.receiver.stat()[0]
-                except:
-                    return -1
-            
-            def getSizeOfMailbox(self):
-                try:
-                    if self.isIMAP:
-                        return 0
-                    else:
-                        return self.receiver.stat()[1]
-                except:
-                    return -1
-            
-            def getMessage(self, messageID, numberOfLines = 0):
-                message = None
-                if self.isIMAP:
-                    # Not currently supported
-                    return None
-                else:
-                    if numberOfLines < 1:
-                        message = self.receiver.top(messageID, numberOfLines)
-                    else:
-                        message = self.receiver.retr(messageID)
-                
-                message = self.Message(message, self.isIMAP)
-                
-                return message
-        
-            class Message:
-                headers = {}
-                
-                data = {
-                    'reponse':  '',
-                    'from':     '',
-                    'to':       '',
-                    'cc':       '',
-                    'bcc':      '',
-                    'subject':  '',
-                    'OContent': [], # Original Content
-                    'PContent': [], # Processed Content
-                    'size':     0
-                }
-    
-                files = [] # attachment
-                
-                def __init__(self, messageContent, receivedViaIMAP = False):
-                    if receivedViaIMAP:
-                        self.data['response'] = messageContent[0]
-                        self.data['OContent'] = messageContent[1]
-                        self.data['PContent'] = email.message_from_string('\n'.join(messageContent[1]))
-                        self.data['size'] = int(messageContent[2])
-                        
-                        for PContentKey in self.data['PContent'].keys():
-                            if self.headers.has_key(PContentKey.lower()):
-                                self.headers[PContentKey.lower()] += " %s" % value
-                            else:
-                                self.headers[PContentKey.lower()] = "%s" % value
-                        
-                        if "subject" in self.headers.keys():
-                            self.data['subject'] = self.headers['subject']
-                        else:
-                            self.data['subject'] = "Untitled Message"
-                            
-                        self.data['charset'] = "UTF-8"
-                        
-                        #### Continue the message processing here (http://pub.shiroyuki.com/share/CalleThread.py)
-                        if self.data['PContent'].is_multipart():
-                            for mpart in self.data['PContent'].walk():
-                                if mpart.get_content_maintype() in ['multipart', 'message']:
-                                    continue
-    
-                def attr(self, key = '', value = ''):
-                    ableToSave = False
-                    if key.strip() == 'from':
-                        ableToSave = not value.strip() == '' and YotsubaSDKPackage.mail.validateEmailAddress(value.strip())
-                    elif key.strip() == 'to' or key.strip() == 'cc' or key.strip() == 'bcc':
-                        receivers = value.split(',')
-                        for receiver in receivers:
-                            if receiver.strip() == '':
-                                continue
-    
-                            if not YotsubaSDKPackage.mail.validateEmailAddress(receiver.strip()):
-                                ableToSave = False
-                                break
-                    elif key.strip() == 'subject':
-                        ableToSave = not value.strip() == defaultMessageSubject
-                    else: # body
-                        ableToSave = not value.strip() == ''
-                    if ableToSave:
-                        self.data[key] = value.strip()
-                    return self.data[key]
-    
-                def save(self, filename):
-                    try:
-                        return YotsubaSDKPackage.fs.write(filename, data, WRITE_PICKLE)
-                    except:
-                        return False
-    
-                def send(self):
-                    if data['from'] == '' or data['to'] == '':
-                        return False
 
 class YotsubaFWPackage:
     class ec:
@@ -1351,6 +1154,296 @@ class YotsubaSDK:
 
 class YotsubaFW:
     ec = YotsubaFWPackage.ec()
+
+
+class MailerObject:
+    _server = None
+    _port = None
+    _SSLEnabled = False
+    _username = None
+    _password = None
+    
+    def __init__(self, server, port = None, SSLEnabled = False):
+        self.server(server)
+        self.port(port)
+        self.enableSSL(SSLEnabled)
+    
+    def server(self, server = None):
+        if server is not None:
+            self._server = server
+        return self._server
+    
+    def port(self, port = None):
+        if port is not None:
+            self._port = port
+        return self._port
+    
+    def SSLEnabled(self, enable = None):
+        if enable is not None:
+            self._SSLEnabled = enable
+        return self._SSLEnabled
+    
+    def username(self, username = None):
+        if username is not None:
+            self._username = username
+        return self._username
+    
+    def password(self, password = None):
+        if password is not None:
+            self._password = password
+        return self._password
+    
+    def connect(self, username = None, password = None):
+        if username is not None:
+            self.username(username)
+        if password is not None:
+            self.password(password)
+
+class MailSender(MailerObject):
+    sender = None
+    _from = None
+    _to = None
+    _cc = None
+    _bcc = None
+    
+    def __init__(self, server, port = None, SSLEnabled = False):
+        MailerObject.__init__(self, server, port, SSLEnabled)
+        self.useSMTP()
+    
+    def useSMTP(self):
+        if self.port() is None and not self.SSLEnabled():
+            self.port(poplib.POP3_PORT)
+        elif self.port() is None and self.SSLEnabled():
+            self.port(poplib.POP3_SSL_PORT)
+        if self.SSLEnabled():
+            self.sender = smtplib.SMTP_SSL(self.server(), self.port())
+        else:
+            self.sender = smtplib.SMTP(self.server(), self.port())
+    
+    def connect(self, username = None, password = None):
+        MailerObject.connect(username, password)
+        try:
+            self.sender.login(self.username(), self.password())
+            return True
+        except:
+            return False
+    
+    def send(self):
+        pass
+    
+    def disconnect(self):
+        try:
+            self.sender.quit()
+            return True
+        except:
+            return False
+
+class MailReceiver(MailerObject):
+    receiver = None
+    isIMAP = False
+    
+    def usePOP(self):
+        if self.port() is None and not self.SSLEnabled():
+            self.port(poplib.POP3_PORT)
+        elif self.port() is None and self.SSLEnabled():
+            self.port(poplib.POP3_SSL_PORT)
+        
+        if self.SSLEnabled():
+            self.receiver = poplib.POP3_SSL(self.server(), self.port())
+        else:
+            self.receiver = poplib.POP3(self.server(), self.port())
+        self.isIMAP = False
+    
+    def useIMAP(self):
+        if self.port() is None and not self.SSLEnabled():
+            self.port(imaplib.IMAP4_PORT)
+        elif self.port() is None and self.SSLEnabled():
+            self.port(imaplib.IMAP4_SSL_PORT)
+        
+        if self.SSLEnabled():
+            self.receiver = imaplib.IMAP4_SSL(self.server(), self.port())
+        else:
+            self.receiver = imaplib.IMAP4(self.server(), self.port())
+        self.isIMAP = True
+    
+    def connect(self, username = None, password = None):
+        MailerObject.connect(username, password)
+        try:
+            if self.isIMAP:
+                self.receiver.login(self.username(), self.password())
+            else:
+                self.receiver.user(self.username())
+                self.receiver.pass_(self.password())
+        except Exception, e:
+            core.log.report(e, core.log.errorLevel)
+    
+    def disconnect(self):
+        try:
+            if self.isIMAP:
+                self.receiver.logout()
+            else:
+                self.receiver.quit()
+            del self._messages
+            self._messages = []
+            return True
+        except:
+            return False
+    
+    def getNumberOfMessages(self):
+        try:
+            if self.isIMAP:
+                return 0
+            else:
+                return self.receiver.stat()[0]
+        except:
+            return -1
+    
+    def getSizeOfMailbox(self):
+        try:
+            if self.isIMAP:
+                return 0
+            else:
+                return self.receiver.stat()[1]
+        except:
+            return -1
+    
+    def read(self, messageID, numberOfLines = 0):
+        message = None
+        rmessage = None
+        if self.isIMAP:
+            # Not currently supported
+            return None
+        else:
+            if numberOfLines < 1:
+                rmessage = self.receiver.top(messageID, numberOfLines)
+            else:
+                rmessage = self.receiver.retr(messageID)
+        
+        message = MailMessage()
+        message.decrypt(message, self.isIMAP)
+        
+        return message
+
+class MailMessage:
+    headers = {}
+    
+    charset = None
+    
+    locked = False
+    
+    data = {
+        'reponse':  '',
+        'subject':  '',
+        'OContent': [], # Original Content
+        'PContent': [], # Processed Content
+        'size':     0
+    }
+    
+    dataBlocks = []
+    
+    textMessageComponents = []
+    
+    HTMLMessageComponents = []
+    
+    files = [] # attachment
+    
+    def __init__(self):
+        pass
+    
+    def encrypt(self):
+        if self.data['subject'] == '':
+            return
+        # Assumes the message is ready for encryption
+        messageBuffer = StringIO.StringIO()
+        writer = MimeWriter.MimeWriter(messageBuffer)
+        pass
+    
+    def decrypt(self, messageContent, receivedViaIMAP = False, overridingSubject = True):
+        self.locked = True
+        if receivedViaIMAP:
+            pass
+        else: # POP3 Message
+            self.data['response'] = messageContent[0]
+            self.data['OContent'] = messageContent[1]
+            self.data['PContent'] = email.message_from_string('\n'.join(messageContent[1]))
+            self.data['size'] = int(messageContent[2])
+            
+            for PContentKey in self.data['PContent'].keys():
+                if self.headers.has_key(PContentKey.lower()):
+                    self.headers[PContentKey.lower()] += " %s" % value
+                else:
+                    self.headers[PContentKey.lower()] = "%s" % value
+            
+            if "subject" in self.headers.keys() and overridingSubject:
+                self.data['subject'] = self.headers['subject']
+            else:
+                self.data['subject'] = "Untitled Message"
+                
+            self.data['charset'] = "UTF-8"
+            
+            if self.data['PContent'].is_multipart():
+                # Assumes that this is a multipart message.
+                for mpart in self.data['PContent'].walk():
+                    mpartFilename = mpart.get_filename()
+                    mpartMainContentType = mpart.get_content_maintype()
+                    mpartSubContentType = mpart.get_content_subtype()
+                    # If the content type of this part is in the pattern multipart/*
+                    # or message/*, ignores this part.
+                    if mpartMainContentType in ['multipart', 'message']:
+                        continue
+                    
+                    self.dataBlocks.append(str(mpart.get_content_type()) + '; filename=' + str(mpart.get_filename()) + '; charset=' + str(mpart.get_content_charset()))
+                    
+                    if mpartMainContentType in ['text'] and not mpartFilename:
+                        localDecodedData = []
+                        # Extracts the data of this part
+                        if mpartSubContentType in ['plain', 'html']:
+                            localDecodedData.append(mpart.get_payload(decode = True))
+                            if not self.charset:
+                                self.charset = part.get_content_charset()
+                        if mpartSubContentType == 'plain':
+                            self.textMessageComponents.append(localDecodedData)
+                        elif mpartSubContentType == 'html':
+                            self.HTMLMessageComponents.append(localDecodedData)
+                    
+                    elif mpart.get_filename():
+                        self.files.append(mpart)
+            else:
+                localDecodedData = self.data['PContent'].get_payload()
+                self.textMessageComponents.append(localDecodedData)
+                self.HTMLMessageComponents.append(localDecodedData)
+        self.locked = False
+    
+    def attr(self, key = '', value = ''):
+        ableToSave = False
+        if key.strip() == 'from':
+            ableToSave = not value.strip() == '' and YotsubaSDKPackage.mail.validateEmailAddress(value.strip())
+        elif key.strip() == 'to' or key.strip() == 'cc' or key.strip() == 'bcc':
+            receivers = value.split(',')
+            for receiver in receivers:
+                if receiver.strip() == '':
+                    continue
+                if not YotsubaSDKPackage.mail.validateEmailAddress(receiver.strip()):
+                    ableToSave = False
+                    break
+        elif key.strip() == 'subject':
+            ableToSave = not value.strip() == defaultMessageSubject
+        else: # body
+            ableToSave = not value.strip() == ''
+        if ableToSave:
+            self.data[key] = value.strip()
+        return self.data[key]
+    def load(self, filename):
+        try:
+            return YotsubaSDKPackage.fs.read(filename, self, READ_PICKLE)
+        except:
+            return None
+        
+    def save(self, filename):
+        try:
+            return YotsubaSDKPackage.fs.write(filename, self, WRITE_PICKLE)
+        except:
+            return False
 
 core = YotsubaCore()
 sdk = YotsubaSDK()
