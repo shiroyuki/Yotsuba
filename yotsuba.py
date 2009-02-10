@@ -912,10 +912,57 @@ class YotsubaSDKPackage:
         defaultMessageSubject = 'Untitled Message'
         re_validEmailAddress = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
         connectionNodes = {}
+        messages = {}
         
         def validateEmailAddress(self, emailAddr):
             return not self.re_validEmailAddress.match(emailAddr) == None
         
+        def addConnection(self, connectionName):
+            if self.connectionNodes.has_key(connectionName):
+                return False
+            # Add a connection node
+            self.connectionNodes[connectionName] = None
+            return True
+        
+        def removeConnection(self, connectionName):
+            try:
+                del self.connectionNodes[connectionName]
+                return True
+            except:
+                return False
+        
+        def connection(self, connectionName):
+            return self.connectionNodes
+        
+        def addMessage(self, messageName):
+            if self.messages.has_key(messageName):
+                return False
+            # Add a connection node
+            self.messages[messageName] = None
+            return True
+        
+        def removeMessage(self, messageName):
+            try:
+                del self.messages[messageName]
+                return True
+            except:
+                return False
+        
+        def message(self, messageName):
+            return self.messages[messageName]
+        
+        def send(self, connectionName, messageNames):
+            if type(messageName) == dict:
+                for messageName in messageNames:
+                    # send a message
+                    pass
+            else:
+                # send a message
+                pass
+            pass
+        
+        def receive(self, connectionName):
+            pass
 
 class YotsubaFWPackage:
     class ec:
@@ -929,6 +976,12 @@ class YotsubaFWPackage:
         cookies = Cookie.SimpleCookie()
         session = None
         sessionPath = ''
+        
+        def env(self, keyIndex):
+            if os.environ.has_key(keyIndex):
+                return os.environ[keyIndex]
+            else:
+                return None
         
         def header(self, key = None, value = None, selfPrint = False):
             if key:
@@ -1327,6 +1380,8 @@ class MailReceiver(MailerObject):
 class MailMessage:
     headers = {}
     
+    defaultMessageContentType = 'text/html'
+    subject = 'Untitled Message'
     charset = None
     
     locked = False
@@ -1351,11 +1406,54 @@ class MailMessage:
         pass
     
     def encrypt(self):
-        if self.data['subject'] == '':
-            return
+        
+        ########################################################################
+        # Prototype code from http://code.activestate.com/recipes/52243/
+        # by Richard Jones
+        ########################################################################
+        #
+        # import sys, smtplib, MimeWriter, base64, StringIO
+        # 
+        # message = StringIO.StringIO()
+        # writer = MimeWriter.MimeWriter(message)
+        # writer.addheader('Subject', 'The kitten picture')
+        # writer.startmultipartbody('mixed')
+        # 
+        # # start off with a text/plain part
+        # part = writer.nextpart()
+        # body = part.startbody('text/plain')
+        # body.write('This is a picture of a kitten, enjoy :)')
+        # 
+        # # now add an image part
+        # part = writer.nextpart()
+        # part.addheader('Content-Transfer-Encoding', 'base64')
+        # body = part.startbody('image/jpeg')
+        # base64.encode(open('kitten.jpg', 'rb'), body)
+        # 
+        # # finish off
+        # writer.lastpart()
+        # 
+        # # send the mail
+        # smtp = smtplib.SMTP('smtp.server.address')
+        # smtp.sendmail('from@from.address', 'to@to.address', message.getvalue())
+        # smtp.quit()
+        #
+        ########################################################################
+        
         # Assumes the message is ready for encryption
         messageBuffer = StringIO.StringIO()
         writer = MimeWriter.MimeWriter(messageBuffer)
+        writer.addheader('Subject', self.subject)
+        writer.startmultipartbody('mixed');
+        
+        # Starts with a default-content-type part
+        part = writer.nextpart()
+        if (len(self.HTMLMessageComponents) > 0):
+            body = part.startbody('text/html')
+            body.write('\n'.join(self.HTMLMessageComponents))
+        else:
+            body = part.startbody('text/html')
+            body.write('\n'.join(self.HTMLMessageComponents))
         pass
     
     def decrypt(self, messageContent, receivedViaIMAP = False, overridingSubject = True):
@@ -1364,8 +1462,8 @@ class MailMessage:
             pass
         else: # POP3 Message
             self.data['response'] = messageContent[0]
-            self.data['OContent'] = messageContent[1]
-            self.data['PContent'] = email.message_from_string('\n'.join(messageContent[1]))
+            self.data['OContent'] = messageContent[1] # Original Message
+            self.data['PContent'] = email.message_from_string('\n'.join(messageContent[1])) # Processed Message
             self.data['size'] = int(messageContent[2])
             
             for PContentKey in self.data['PContent'].keys():
@@ -1375,11 +1473,11 @@ class MailMessage:
                     self.headers[PContentKey.lower()] = "%s" % value
             
             if "subject" in self.headers.keys() and overridingSubject:
-                self.data['subject'] = self.headers['subject']
+                self.subject = self.headers['subject']
             else:
-                self.data['subject'] = "Untitled Message"
+                self.subject = "Untitled Message"
                 
-            self.data['charset'] = "UTF-8"
+            self.charset = "UTF-8"
             
             if self.data['PContent'].is_multipart():
                 # Assumes that this is a multipart message.
