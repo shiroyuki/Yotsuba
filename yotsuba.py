@@ -368,7 +368,7 @@ class YotsubaSDKPackage:
             del treeOrg
             return True
         
-        def query(self, treeName, selector):
+        def query(self, treeName, selector, useMultiThread = False):
             # If `treeName` and `selector` are not of type string, returns an empty list.
             if not type(selector) == str or  not type(treeName) == str:
                 core.log.report(
@@ -390,7 +390,7 @@ class YotsubaSDKPackage:
             else:
                 pass
             # Creates a selector reference
-            selectorReference = sdk.crypt.hash(selector, ['md5'])
+            selectorReference = sdk.crypt.hash(selector, ['sha'])
             # Initializes the list of queried nodes
             resultList = []
             self.sharedMemory[selectorReference] = []
@@ -406,56 +406,57 @@ class YotsubaSDKPackage:
             queries = re.split("\,", selector)
             # Allocates for a locks
             self.locks[selectorReference] = thread.allocate_lock()
-            self.locks[selectorReference].acquire()
-            self.runningThreads[selectorReference] = []
-            self.exitedThreads[selectorReference] = []
+            if useMultiThread:
+                self.locks[selectorReference].acquire()
+                self.runningThreads[selectorReference] = []
+                self.exitedThreads[selectorReference] = []
+            
             for query in queries:
-                # [Locked]
-                if query in self.runningThreads[selectorReference]:
-                    continue
-                self.runningThreads[selectorReference].append(query)
-                thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query))
+                # Multi-threading feature
+                if useMultiThread:
+                    if query in self.runningThreads[selectorReference]:
+                        continue
+                    self.runningThreads[selectorReference].append(query)
+                    thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
+                else:
+                    self.queryWithOneSelector(selectorReference, startupNode, query, False)
+            
             self.locks[selectorReference].acquire()
             resultList = self.sharedMemory[selectorReference]
             self.locks[selectorReference].release()
-            self.locks['referencing'].acquire()
-            while self.locks[selectorReference].locked():
-                pass
-            core.log.report(
-                "Removed reference [%s]" % selectorReference,
-                core.log.warningLevel
-            )
-            del self.sharedMemory[selectorReference]
-            del self.runningThreads[selectorReference]
-            del self.exitedThreads[selectorReference]
-            del self.locks[selectorReference]
-            try:
-                self.locks['referencing'].release()
-            except:
-                print "Removing referencing denied"
+            
+            if useMultiThread:
+                self.locks['referencing'].acquire()
+                while self.locks[selectorReference].locked():
+                    pass
+                del self.sharedMemory[selectorReference]
+                del self.runningThreads[selectorReference]
+                del self.exitedThreads[selectorReference]
+                del self.locks[selectorReference]
+                try:
+                    self.locks['referencing'].release()
+                except:
+                    print "Removing referencing denied"
             return self.queriedNodes(resultList)
         
-        def queryWithOneSelector(self, selectorReference, startupNode, query):
-            # Get the path
+        def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
+            # Gets the path
             combination = re.split("\ +", query.strip())
             if len(combination) > 0:
                 try:
                     self.sharedMemory[selectorReference].extend(
                         self.traverse(startupNode, combination)
                     )
-                    self.exitedThreads[selectorReference].append(query)
+                    if useMultiThread:
+                        self.exitedThreads[selectorReference].append(query)
                 except:
                     core.log.report(
                         "Shared Memory [%s] not available" % selectorReference,
                         core.log.errorLevel
                     )
-                if not selectorReference in self.runningThreads:
+                if not selectorReference in self.runningThreads and useMultiThread:
                     thread.exit()
-                if len(self.runningThreads[selectorReference]) == len(self.exitedThreads[selectorReference]):
-                    core.log.report(
-                        "Unlocked [%s]" % selectorReference,
-                        core.log.warningLevel
-                    )
+                if useMultiThread and len(self.runningThreads[selectorReference]) == len(self.exitedThreads[selectorReference]):
                     try:
                         self.locks[selectorReference].release()
                     except:

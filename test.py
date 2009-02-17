@@ -19,7 +19,7 @@ showOutput = True
 output = []
 forceShowLog = False
 forceHideLog = False
-numOfStressTests = 1
+numOfStressTests = 200
 numOfCases = 0
 numOfFailedCases = 0
 
