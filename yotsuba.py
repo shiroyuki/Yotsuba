@@ -376,7 +376,7 @@ class YotsubaSDKPackage:
                     core.log.warningLevel
                 )
                 # return nothing if either no treeName or no selector is not a string
-                return []
+                return self.queriedNodes([])
             else:
                 pass
             # If there is no reference to the tree named by `treeName`, return an empty list.
@@ -386,7 +386,7 @@ class YotsubaSDKPackage:
                     core.log.warningLevel
                 )
                 # return nothing if there is not a tree called by treeName
-                return []
+                return self.queriedNodes([])
             else:
                 pass
             # Creates a selector reference
