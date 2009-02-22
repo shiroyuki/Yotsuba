@@ -2,7 +2,7 @@
 
 # Test Suite 1.1 for Yotsuba 2.0
 # Juti Noppornpitak <juti_n@yahoo.co.jp>
-
+import sys
 import time
 
 import yotsuba
@@ -77,17 +77,22 @@ def testingProcedure():
     global numOfFailedCases
     
     # sdk.xml > Initialization test
-    yotsuba.sdk.xml.read("test", "test.xml")
-    tEqual("XML Tree Construction", len(yotsuba.sdk.xml.trees['test'].children), 6)
-    tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().name(), 'a')
-    tEqual("XML Tree Construction", yotsuba.sdk.xml.trees['test'].child().parent().name(), 'root')
+    if not yotsuba.fs.exists("test.xml"):
+        raise "Cannot find test.xml"
+    if not yotsuba.fs.readable("test.xml"):
+        raise "Cannot read test.xml"
+    if not yotsuba.kotoba.read("test", "test.xml"):
+        raise "Cannot parse test.xml"
+    tEqual("XML Tree Construction", len(yotsuba.kotoba.trees['test'].children), 6)
+    tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child().name(), 'a')
+    tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child().parent().name(), 'root')
     # sdk.xml > Existance tests
     passedQueries = ['c1', 'c c1', 'root c c1', 'root c1', 'root > c c1', 'root c > c1', 'root > c > c1', 'common', 'c c1, e e11']
     failedQueries = ['c3', 'c c3', 'root > c1', 'root c e1']
     for pq in passedQueries:
-        tMore("XML Query Test / Existance (%s)" % pq, yotsuba.sdk.xml.query('test', pq).length(), 0)
+        tMore("XML Query Test / Existance (%s)" % pq, yotsuba.kotoba.query('test', pq).length(), 0)
     for fq in failedQueries:
-        tEqual("XML Query Test / Existance (%s)" % fq, yotsuba.sdk.xml.query('test', fq).length(), 0)
+        tEqual("XML Query Test / Existance (%s)" % fq, yotsuba.kotoba.query('test', fq).length(), 0)
     # sdk.xml > Correctness tests
     passedQueries = {
         'common': 4,
@@ -123,9 +128,9 @@ def testingProcedure():
         'c c1, e e11': 2,
     }
     for pqK, pqV in passedQueries.iteritems():
-        tEqual("XML Query Test / Correctness (%s)" % pqK, yotsuba.sdk.xml.query('test', pqK).length(), pqV)
+        tEqual("XML Query Test / Correctness (%s)" % pqK, yotsuba.kotoba.query('test', pqK).length(), pqV)
     # sdk.xml > Data extraction tests
-    tEqual("XML Query Test (Data)", yotsuba.sdk.xml.query('test', 'c c1').data(), yotsuba.sdk.xml.trees['test'].children[2].children[0].data())
+    tEqual("XML Query Test (Data)", yotsuba.kotoba.query('test', 'c c1').data(), yotsuba.kotoba.trees['test'].children[2].children[0].data())
     # sdk.xml > Selector-object tests
     passedQueries = {
         'element': ['element', None, '', ''],
@@ -137,10 +142,10 @@ def testingProcedure():
     }
     for pqK, pqV in passedQueries.iteritems():
         tPrint(":\tCreating SO from '%s'" % pqK)
-        tEqual("The selector object construction (Name)", yotsuba.sdk.xml.makeSelectorObject(pqK).name(), pqV[0])
-        tEqual("The selector object construction (ID/Operator)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id')[0], pqV[1])
-        tEqual("The selector object construction (ID/Value)", yotsuba.sdk.xml.makeSelectorObject(pqK).attr('id')[1], pqV[2])
-        tEqual("The selector object construction (Filters)", ''.join(yotsuba.sdk.xml.makeSelectorObject(pqK).filter()), pqV[3])
+        tEqual("The selector object construction (Name)", yotsuba.kotoba.makeSelectorObject(pqK).name(), pqV[0])
+        tEqual("The selector object construction (ID/Operator)", yotsuba.kotoba.makeSelectorObject(pqK).attr('id')[0], pqV[1])
+        tEqual("The selector object construction (ID/Value)", yotsuba.kotoba.makeSelectorObject(pqK).attr('id')[1], pqV[2])
+        tEqual("The selector object construction (Filters)", ''.join(yotsuba.kotoba.makeSelectorObject(pqK).filter()), pqV[3])
     tPrint("------------------------------------------------------------------------")
 
 def runTests():
@@ -181,15 +186,15 @@ if __name__ == '__main__':
     
     # Calls the test suite
     t_stat = None
-    if yotsuba.core.fs.exists('test.stat'):
-        t_stat = yotsuba.core.fs.read('test.stat', yotsuba.READ_PICKLE)
+    if yotsuba.fs.exists('test.stat'):
+        t_stat = yotsuba.fs.read('test.stat', yotsuba.READ_PICKLE)
     else:
         t_stat = []
     
     t_currentStat = runTests()
     t_stat.extend(t_currentStat)
     
-    yotsuba.core.fs.write('test.stat', t_stat, yotsuba.WRITE_PICKLE)
+    yotsuba.fs.write('test.stat', t_stat, yotsuba.WRITE_PICKLE)
     
     print "Running Time"
     print "    Current\t\t%.5f\tsecond(s)" % getAverage(t_currentStat)
@@ -211,17 +216,19 @@ if __name__ == '__main__':
     if yotsuba.core.log.hasError and not forceHideLog:
         print "------------------------------------------------------------------------"
         try:
-                yotsuba.core.fs.remove('test.log')
+                yotsuba.fs.remove('test.log')
         except:
                 pass
-        if not yotsuba.core.fs.writable('./'):
+        if not yotsuba.fs.writable('./'):
                 print 'Not writable'
-        if yotsuba.core.fs.write('test.log', yotsuba.core.log.export()):
+        if yotsuba.fs.write('test.log', yotsuba.core.log.export()):
                 print 'The report was just written'
         else:
                 print 'The report was not written'
-        if not yotsuba.core.fs.exists('test.log'):
+        if not yotsuba.fs.exists('test.log'):
                 print 'Failed to write the report'
         else:
                 print "See the 'test.log'"
+    else:
+        yotsuba.fs.remove('test.log')
     print "========================================================================"

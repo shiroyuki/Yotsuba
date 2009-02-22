@@ -308,547 +308,7 @@ class YotsubaSDKPackage:
                 core.log.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', core.log.errorLevel)
             return result
     
-    class xml:
-        """
-        This package is a breakthrough of XML parsers in Python using
-        basic CSS3-selector method, instead of XPath.
-        
-        This is a prototype.
-        """
-        rule_descendantCombinator = ' '
-        rule_childCombinator = '>'
-        rule_adjacentSiblingCombinator = '+'
-        rule_generalSiblingCombinator = '~'
-        specialRules = [
-            rule_childCombinator,
-            rule_adjacentSiblingCombinator,
-            rule_generalSiblingCombinator
-        ]
-        trees = {}
-        locks = {}
-        runningThreads = {}
-        exitedThreads = {}
-        sharedMemory = {}
-        
-        def __init__(self):
-            self.locks['referencing'] = thread.allocate_lock()
-        
-        def read(self, treeName, source):
-            """
-            Read either a string or a file in the XML format and save.
-            """
-            tree = None
-            treeOrg = None
-            core.log.report('sdk.xml.read')
-            try:
-                if core.fs.exists(source):
-                    treeOrg = xml.dom.minidom.parse(source)
-                else:
-                    treeOrg = xml.dom.minidom.parseString(source)
-            except:
-                core.log.report(
-                    '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
-                    sys.exc_info()[0],
-                    core.log.errorLevel
-                )
-                return False
-            try:
-                for node in treeOrg.childNodes:
-                    if not node.nodeType == node.ELEMENT_NODE:
-                        continue
-                    tree = self.buildTreeOnTheFly(node)
-                    break
-                self.trees[treeName] = tree
-            except:
-                core.log.report(
-                    '[sdk.xml.read] Tree creation raised errors.\n\t%s' % sys.exc_info()[0],
-                    core.log.errorLevel
-                )
-                return False
-            del treeOrg
-            return True
-        
-        def query(self, treeName, selector, useMultiThread = False):
-            # If `treeName` and `selector` are not of type string, returns an empty list.
-            if not type(selector) == str or  not type(treeName) == str:
-                core.log.report(
-                    '[sdk.xml.query] unexpected types of treeName and selector',
-                    core.log.warningLevel
-                )
-                # return nothing if either no treeName or no selector is not a string
-                return self.queriedNodes([])
-            else:
-                pass
-            # If there is no reference to the tree named by `treeName`, return an empty list.
-            if type(treeName) == str and not self.trees.has_key(treeName):
-                core.log.report(
-                    '[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
-                    core.log.warningLevel
-                )
-                # return nothing if there is not a tree called by treeName
-                return self.queriedNodes([])
-            else:
-                pass
-            # Creates a selector reference
-            selectorReference = sdk.crypt.hash(selector, ['sha'])
-            # Initializes the list of queried nodes
-            resultList = []
-            self.sharedMemory[selectorReference] = []
-            # Gets the reference to the root node
-            startupNode = None
-            try:
-                startupNode = self.trees[treeName]
-            except:
-                startupNode = treeName
-            # Queries cleanup (Clear out the tab character)
-            selector = re.sub("\t", " ", selector)
-            # Engroups
-            queries = re.split("\,", selector)
-            # Allocates for a locks
-            self.locks[selectorReference] = thread.allocate_lock()
-            if useMultiThread:
-                self.locks[selectorReference].acquire()
-                self.runningThreads[selectorReference] = []
-                self.exitedThreads[selectorReference] = []
-            
-            for query in queries:
-                # Multi-threading feature
-                if useMultiThread:
-                    if query in self.runningThreads[selectorReference]:
-                        continue
-                    self.runningThreads[selectorReference].append(query)
-                    thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
-                else:
-                    self.queryWithOneSelector(selectorReference, startupNode, query, False)
-            
-            self.locks[selectorReference].acquire()
-            resultList = self.sharedMemory[selectorReference]
-            self.locks[selectorReference].release()
-            
-            if useMultiThread:
-                self.locks['referencing'].acquire()
-                while self.locks[selectorReference].locked():
-                    pass
-                del self.sharedMemory[selectorReference]
-                del self.runningThreads[selectorReference]
-                del self.exitedThreads[selectorReference]
-                del self.locks[selectorReference]
-                try:
-                    self.locks['referencing'].release()
-                except:
-                    print "Removing referencing denied"
-            return self.queriedNodes(resultList)
-        
-        def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
-            # Gets the path
-            combination = re.split("\ +", query.strip())
-            if len(combination) > 0:
-                try:
-                    self.sharedMemory[selectorReference].extend(
-                        self.traverse(startupNode, combination)
-                    )
-                    if useMultiThread:
-                        self.exitedThreads[selectorReference].append(query)
-                except:
-                    core.log.report(
-                        "Shared Memory [%s] not available" % selectorReference,
-                        core.log.errorLevel
-                    )
-                if not selectorReference in self.runningThreads and useMultiThread:
-                    thread.exit()
-                if useMultiThread and len(self.runningThreads[selectorReference]) == len(self.exitedThreads[selectorReference]):
-                    try:
-                        self.locks[selectorReference].release()
-                    except:
-                        core.log.report(
-                            "Lock [%s] already released" % selectorReference,
-                            core.log.errorLevel
-                        )
-            else:
-                core.log.report(
-                    "No operation [%s]" % selectorReference,
-                    core.log.errorLevel
-                )
-        
-        def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
-            """
-            Performs querying at the low level on the tree. This function is
-            different from query() that it's querying based on each position.
-            The speed complexity is O(n) where n is the number of nodes.
-            
-            Please notes that this function treats the parameter node as the
-            root of a subtree of its origin.
-            
-            See http://doc.shiroyuki.com/lib/Yotsuba_SDK_XML_Package#def_traverse.28node.2C_selector.2C_selectorLevel.2C_poleNode.2C_singleSiblingSearch.29
-            for the description of parameters
-            """
-            try:
-                rule = self.rule_descendantCombinator
-                # If there is no selector, return an empty list
-                if selectorLevel >= len(selector):
-                    return []
-                if selector[selectorLevel] in self.specialRules:
-                    selectorLevel += 1
-                    try:
-                        rule = selector[selectorLevel - 1]
-                    except:
-                        core.log.report(
-                            '%d:%s\n\t|_ Failed to determine the special rule' % (node.level, node.name()),
-                            core.log.warningLevel
-                        )
-                # If two or more rules are specified consecutively, regards this selector as ill-formatted
-                if selector[selectorLevel] in self.specialRules:
-                    return []
-                # Makes the selector object
-                s = self.makeSelectorObject(selector[selectorLevel])
-                # First, check if the current element is on the path regardless to the attributes and some filtering options
-                isTheNodeOnThePath = \
-                    ( \
-                        s.name() == '*' \
-                    ) or ( \
-                        s.name() == '' \
-                        and ( \
-                            len(s.attr().keys()) > 0 \
-                            or len(s.filter()) > 0 \
-                        ) \
-                    ) or ( \
-                        s.name() == node.name() \
-                    )
-                # Second, uses attributes to filter out the element that is not qualified.
-                # (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
-                if isTheNodeOnThePath:
-                    for attrIndex in s.attr().keys():
-                        # Check if the selector requires the element to have this specific attribute `attrIndex`
-                        if s.attr(attrIndex)[1] == None:
-                            if not node.hasAttr(attrIndex):
-                                isTheNodeOnThePath = False
-                                break
-                        # Check if the selector requires the element to have this attribute `attrIndex` with
-                        # the specific value.
-                        else:
-                            # Annoying check for slipped errors
-                            if len(node.attr(attrIndex)) == 0:
-                                isTheNodeOnThePath = False
-                                break
-                            # Then, real check
-                            else:
-                                # Get the list of the values, separated by tab character or white spaces.
-                                s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
-                                # Check the rules are BROKEN
-                                if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
-                                   and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                                   and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
-                                   and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
-                                   and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
-                                   and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
-                                    isTheNodeOnThePath = False
-                                    break
-                                # Otherwise this is on the path
-                                else:
-                                    pass
-                # Third, check the filters
-                if isTheNodeOnThePath:
-                    for filterOption in s.filter():
-                        if filterOption == 'root' and not node.level == 0:
-                            isTheNodeOnThePath = False
-                            break
-                        elif filterOption == 'empty' and (len(node.children) > 0 or node.data()):
-                            isTheNodeOnThePath = False
-                            break
-                # Check if this node is on the selector path but not the destination
-                if isTheNodeOnThePath:
-                    selectorLevel += 1
-                # Allocate the memory of the result list
-                resultList = []
-                # Check the rule
-                # Handle a child combinator
-                if rule == self.rule_childCombinator:
-                    if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
-                        return [node]
-                    else:
-                        core.log.report(
-                            '%d:%s (Limit break, Force-stop)' % (node.level, node.name()),
-                            core.log.codeWatchLevel
-                        )
-                        return []
-                # Handle a heirarchy combinator
-                elif rule == self.rule_descendantCombinator:
-                    # If the node is on the path and it is the end of the path
-                    if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
-                        # If the last element required on the path is a wild card,
-                        # keeps the iterator going to the bottom of the tree.
-                        if self.makeSelectorObject(selector[-1]).name() == '*':
-                            selectorLevel -= 1
-                        else: pass
-                        resultList.append(node)
-                    cnodeIndex = -1
-                    doSkip = True
-                    for cnode in node.children:
-                        cnodeIndex += 1
-                        # This is the last node to be skipped based on the poleNode.
-                        if poleNode and poleNode.name() == cnode.name() and poleNode.level == cnode.level:
-                            doSkip = False
-                            continue
-                        # Skips if this node comes before the poleNode.
-                        if poleNode and doSkip:
-                            continue
-                        # If this is the single sibling search, skips the next
-                        # sibling until it meets the criteria.
-                        if singleSiblingSearch:
-                            doSkip = True
-                        # Adds the child node to the result list
-                        resultList.extend(self.traverse(cnode, selector, selectorLevel))
-                    return resultList
-                # Handles an adjacent sibling combinator (get one next sibling)
-                elif rule == self.rule_adjacentSiblingCombinator:
-                    resultList.extend(
-                        self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
-                    )
-                    return resultList
-                # Handles a general sibling combinator (get all next siblings)
-                elif rule == self.rule_generalSiblingCombinator:
-                    resultList.extend(
-                        self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
-                    )
-                    return resultList
-                # No rule applied
-                else:
-                    return []
-            except:
-                core.log.report(
-                    '[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0]),
-                    core.log.errorLevel
-                )
-                return []
-        
-        def makeSelectorObject(self, selectorObjectString):
-            """
-            Makes a selector object with a selector-object string (a tag name with or without attributes).
-            Returns a null object if the selectorObjectString is not well-formatted.
-            
-            A well-formatted selector objects should be in the following patterns.
-            - element
-            - element[attrName]
-            - element[attrName=attrValue]
-            - element[attrName^=attrValue]
-            - element[attrName$=attrValue]
-            - element[attrName~=attrValue]
-            - element[attrName*=attrValue]
-            - element[attrName|=attrValue]
-            - element[attrName1=attrValue1][attrName2=attrValue2]...[attrNameN=attrValueN]
-            - element[...]:filter1:filter2:...:filterN
-            
-            (Source: http://docs.jquery.com/Selectors)
-            (Source: http://www.w3.org/TR/css3-selectors/#selectors)
-            """
-            
-            SOName = ''
-            SOOptions = ''
-            SOAttrs = ''
-            SOFilters = ''
-            RE_Attr = re.compile(".*\[.*")
-            RE_Filter = re.compile(".*:.*")
-            if RE_Attr.match(selectorObjectString) and RE_Filter.match(selectorObjectString):
-                # Extract the tag name and its options/filters
-                SOName, SOOptions = re.split("\[", selectorObjectString, 1)
-                # Extract the attribute filters and the selecting filters
-                SOAttrs, SOFilters = re.split(":", SOOptions, 1)
-            elif RE_Attr.match(selectorObjectString) and not RE_Filter.match(selectorObjectString):
-                # Extract the tag name and its options/filters
-                SOName, SOOptions = re.split("\[", selectorObjectString, 1)
-                # Extract the attribute filters and the selecting filters
-                SOAttrs = SOOptions
-            elif not RE_Attr.match(selectorObjectString) and RE_Filter.match(selectorObjectString):
-                # Extract the tag name and its options/filters
-                SOName, SOOptions = re.split(":", selectorObjectString, 1)
-                # Extract the attribute filters and the selecting filters
-                SOFilters = SOOptions
-            else:
-                SOName = selectorObjectString
-            # Free memory
-            del SOOptions
-            # Check the requirement
-            if (len(SOAttrs) > 0 and not re.match(".+\]$", SOAttrs)) or re.match(".*:$", SOFilters):
-                return None
-            # Engroup attributes
-            SOAttrs = re.split("\]\[", SOAttrs[:-1])
-            # Engroup filters
-            SOFilters = re.split(":", SOFilters)
-            # Prepare to make an object
-            SOAttrsRaw = SOAttrs
-            SOAttrs = {}
-            for SOAttr in SOAttrsRaw:
-                if re.match("[a-zA-Z0-9_\-]+=.+", SOAttr):
-                    k, v = re.split("=", SOAttr, 1)
-                    SOAttrs[k] = ['=', v]
-                elif re.match("[a-zA-Z0-9_\-]+\|=.+", SOAttr):
-                    k, v = re.split("\|=", SOAttr, 1)
-                    SOAttrs[k] = ['|=', v]
-                elif re.match("[a-zA-Z0-9_\-]+\^=.+", SOAttr):
-                    k, v = re.split("\^=", SOAttr, 1)
-                    SOAttrs[k] = ['^=', v]
-                elif re.match("[a-zA-Z0-9_\-]+\$=.+", SOAttr):
-                    k, v = re.split("\$=", SOAttr, 1)
-                    SOAttrs[k] = ['$=', v]
-                elif re.match("[a-zA-Z0-9_\-]+\*=.+", SOAttr):
-                    k, v = re.split("\*=", SOAttr, 1)
-                    SOAttrs[k] = ['*=', v]
-                elif re.match("[a-zA-Z0-9_\-]+\~=.+", SOAttr):
-                    k, v = re.split("\~=", SOAttr, 1)
-                    SOAttrs[k] = ['~=', v]
-                elif re.match("[a-zA-Z0-9_\-]+", SOAttr):
-                    k = SOAttr
-                    SOAttrs[k] = [None, None]
-            if SOName == '' and (len(SOAttrs) == 0 or len(SOFilters) == 0):
-                return None
-            return self.selectorObject(SOName, SOAttrs, SOFilters)
-            
-        
-        def isTheEndOfPathReached(self, selector, selectorLevel):
-            try:
-                return selectorLevel >= len(selector) - selector.count('>') - selector.count('+') - selector.count('~')
-            except:
-                return False
-        
-        def buildTreeOnTheFly(self, node, parentNode = None, level = 0, levelIndex = 0):
-            if not node.nodeType == node.ELEMENT_NODE:
-                # Ignore non-element node
-                return None
-            try:
-                # Class-node instance of the parameter `node`
-                treeNode = self.node(node, parentNode, level, levelIndex)
-                if len(node.childNodes) > 0:
-                    core.log.report('%d:%s > Constructing children' % (level, treeNode.name()), core.log.codeWatchLevel)
-                    cnodeIndex = -1
-                    for cnode in node.childNodes:
-                        try:
-                            cnodeIndex += 1
-                            childNode = self.buildTreeOnTheFly(cnode, treeNode, level + 1, cnodeIndex)
-                            if childNode == None:
-                                continue
-                            core.log.report('%d:%s/%s' % (level, treeNode.name(), childNode.name()), core.log.codeWatchLevel)
-                            treeNode.children.append(childNode)
-                        except:
-                            core.log.report(
-                                '[sdk.xml.buildTreeOnTheFly] Childen creation failed\n\t%s' % sys.exc_info()[0],
-                                core.log.errorLevel
-                            )
-                            return None
-                    core.log.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), core.log.codeWatchLevel)
-                return treeNode
-            except:
-                core.log.report(
-                    '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
-                    core.log.errorLevel
-                )
-                return None
-
-        class node:
-            level = 0
-            element = None
-            children = None
-            parentElement = None
-            hash = None
-            
-            def __init__(self, element, parent = None, level = 0, levelIndex = 0):
-                self.level = level
-                self.element = element
-                self.children = []
-                self.parentElement = parent
-                self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
-            
-            def parent(self):
-                return self.parentElement
-            
-            def name(self):
-                return self.element.tagName
-
-            def attr(self, attrName):
-                return self.element.getAttribute(attrName)
-            
-            def hasAttr(self, attrName):
-                return self.element.hasAttribute(attrName)
-            
-            def data(self):
-                try:
-                    if not self.element.hasChildNodes():
-                        # Empty node
-                        return ''
-                    resultData = []
-                    for dataNode in self.element.childNodes:
-                        try:
-                            if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
-                                # Ignore non-data node
-                                del resultData
-                                return ''
-                            resultData.append(dataNode.data)
-                        except:
-                            # Malform XML document
-                            del resultData
-                            return ''
-                    return '\n'.join(resultData)
-                except:
-                    return ''
-            
-            def child(self, indexNumber = 0):
-                try:
-                    return self.children[indexNumber]
-                except:
-                    return []
-        
-        class queriedNodes:
-            elements = None
-            
-            def __init__(self, elements):
-                self.elements = []
-                for element in elements:
-                    if element in self.elements:
-                        continue
-                    self.elements.append(element)
-            
-            def eq(self, indexNumber = 0):
-                try:
-                    return self.elements[indexNumber]
-                except:
-                    return None
-            
-            def data(self):
-                output = []
-                for element in self.elements:
-                    output.append(element.data())
-                return ''.join(output)
-            
-            def length(self):
-                return len(self.elements)
-        class selectorObject:
-            SOName = None
-            SOAttrs = None
-            SOFilters = None
-            
-            def __init__(self, name, attrs = {}, filters = []):
-                self.SOName = name
-                if type(attrs) == dict:
-                    self.SOAttrs = attrs
-                else:
-                    self.SOAttrs = {}
-                if type(filters) == list:
-                    self.SOFilters = filters
-                else:
-                    self.SOFilters = []
-            
-            def name(self):
-                return self.SOName
-            
-            def attr(self, attrName = None):
-                if not attrName:
-                    return self.SOAttrs
-                try:
-                    return self.SOAttrs[attrName]
-                except:
-                    return [None, '']
-            
-            def filter(self):
-                return self.SOFilters
+    
 
     class crypt:
         cryptographicDepthLevel = 10
@@ -1023,10 +483,10 @@ class YotsubaFWPackage:
                 self.session = self.sessionObject()
                 core.log.report("[fw.ec.session] Initialized the session information")
                 sid = self.cookie('sid')
-                locationToLoad = core.fs.abspath(self.sessionPath + '/' + sid, True)
-                if sid and core.fs.exists(locationToLoad):
+                locationToLoad = fs.abspath(self.sessionPath + '/' + sid, True)
+                if sid and fs.exists(locationToLoad):
                     try:
-                        self.session = core.fs.read(locationToLoad, READ_PICKLE)
+                        self.session = fs.read(locationToLoad, READ_PICKLE)
                         if self.session:
                             core.log.report("[fw.ex.session] Session '%s' restored" % sid)
                         else:
@@ -1034,7 +494,7 @@ class YotsubaFWPackage:
                             core.log.report("[fw.ex.session] Session '%s' failed to be restored" % sid, core.log.warningLevel)
                     except:
                         localRenewSession = True
-                        core.log.report("[fw.ex.session] Session '%s' failed to be restored as core.fs threw exception." % sid, core.log.errorLevel)
+                        core.log.report("[fw.ex.session] Session '%s' failed to be restored as fs threw exception." % sid, core.log.errorLevel)
                 else:
                     sid = hashlib.new(str(time.time())).hexdigest()
                     self.session.id = sid
@@ -1069,11 +529,11 @@ class YotsubaFWPackage:
                 self.sessionPath = DEFAULT_PATH_TO_SESSION_STORAGE
             # Look for the session storage
             # CASE: Cannot find the session storage.
-            if not core.fs.exists(self.sessionsPath):
+            if not fs.exists(self.sessionsPath):
                 core.log.report("[fw.ec.sessionSave] The session storage does not exist.", core.log.warningLevel)
-                if core.fs.mkdir(self.sessionPath):
+                if fs.mkdir(self.sessionPath):
                     core.log.report("[fw.ec.sessionSave] The session storage is initialized.")
-                    if core.fs.writable(self.sessionPath):
+                    if fs.writable(self.sessionPath):
                         core.log.report("[fw.ec.sessionSave] The session storage is confirmed to be accessible.")
                 else:
                     core.log.report("[fw.ec.sessionSave] The creation of the session storage is not permitted.", core.log.errorLevel)
@@ -1081,16 +541,16 @@ class YotsubaFWPackage:
             else:
                 core.log.report("[fw.ec.sessionSave] Found the session storage")
             # Prepare the path of the session storage for this session
-            locationToSave = core.fs.abspath(self.sessionPath + '/' + self.session.id, True)
+            locationToSave = fs.abspath(self.sessionPath + '/' + self.session.id, True)
             # Locate the existed information of this session
-            if not core.fs.exists(locationToSave):
+            if not fs.exists(locationToSave):
                 core.log.report("[fw.ec.sessionSave] Session ID '%s' does not exists but it will be automatically generated." % self.session.id, core.log.warningLevel)
             # Test writing
-            if not core.fs.writable(locationToSave):
+            if not fs.writable(locationToSave):
                 core.log.report("[fw.ec.sessionSave] Session ID '%s' is not saved as backing up this session is not permitted." % self.session.id, core.log.warningLevel)
                 return False
             # Backup
-            if not core.fs.write(locationToSave, self.session.data, WRITE_PICKLE):
+            if not fs.write(locationToSave, self.session.data, WRITE_PICKLE):
                 core.log.report("[fw.ec.sessionSave] Session '%s' is not saved as the result of failed backup." % self.session.id, core.log.errorLevel)
                 return False
             return True
@@ -1127,8 +587,8 @@ class YotsubaFWPackage:
         def translate(self, template):
             if not type(template) == str:
                 return ''
-            if core.fs.exists(template):
-                template = core.fs.read(template)
+            if fs.exists(template):
+                template = fs.read(template)
             for tagKey, tagValue in tags:
                 re.sub("<%s%s/>" % (self.tagPrefix, tagKey), self.tagValue, template)
             return template
@@ -1168,7 +628,6 @@ class YotsubaFWPackage:
             return resultURL
 
 class YotsubaCore:
-    fs = YotsubaCorePackage.fs()
     log = YotsubaCorePackage.log()
     
     testBiggerLock = thread.allocate_lock()
@@ -1204,11 +663,720 @@ class YotsubaSDK:
     log = YotsubaSDKPackage.log()
     mail = YotsubaSDKPackage.mail()
     time = YotsubaSDKPackage.time()
-    xml = YotsubaSDKPackage.xml()
 
 class YotsubaFW:
     ec = YotsubaFWPackage.ec()
 
+class YotsubaPackageFileSystemInterface:
+    # Make directory
+    def mkdir(self, destpath):
+        try:
+            os.mkdir(destpath)
+            return True
+        except:
+            return False
+
+    # Check the size of file or directory
+    def size(self, destpath):
+        size = int(os.stat(destpath)[6])
+        return size
+
+    # Friendly Path Identifier
+    def abspath(self, destpath, request_relative_path_fixed = False):
+        if request_relative_path_fixed:
+            if not re.compile('^/').match(destpath):
+                destpath = '/' + destpath
+            return os.path.abspath( os.getcwd() + destpath )
+        else:
+            return os.path.abspath( destpath )
+
+    # Symbol-instance checker
+    def checkType(self, destpath):
+        if not os.path.exists(destpath):
+            return -1
+        if os.path.isfile( self.abspath( destpath) ) or (os.path.islink( self.abspath( destpath ) ) and os.path.isfile( self.abspath( destpath) ) ):
+            return FILE
+        return DIRECTORY
+
+    def exists(self, destpath):
+        return    os.access(os.path.abspath(destpath), os.F_OK)
+
+    def readable(self, destpath):
+        return    os.access(os.path.abspath(destpath), os.R_OK)
+
+    def writable(self, destpath):
+        return    os.access(os.path.abspath(destpath), os.W_OK)
+
+    def executable(self, destpath):
+        return    os.access(os.path.abspath(destpath), os.X_OK)
+
+    def isfile(self, destpath):
+        return    self.checkType(destpath) == FILE
+
+    def isdir(self, destpath):
+        return    self.checkType(destpath) == DIRECTORY
+
+    # Browsing Function
+    def browse(self, destpath, request_abspath_shown = False, filter = None, filterToSearch = False):
+        # Check if this is a directory
+        if not self.isdir( self.abspath( destpath ) ) or not self.readable( self.abspath(destpath) ):
+            return None
+        # Get the list of items
+        dls = os.listdir(destpath)
+        # Classify each item
+        files = []
+        directories = []
+        ref = None
+        if filter:
+            ref = re.compile(filter)
+        for item in dls:
+            if ref:
+                # if matched not in search mode, filter out.
+                # then, `unmatched` items kept
+                if ref.match(item) and not filterToSearch: continue
+                # if unmatched in search mode, filter out.
+                # then, `matched` items kept
+                if not ref.match(item) and filterToSearch: continue
+            if self.isfile( destpath + '/' + item ):
+                if request_abspath_shown:
+                    files.append(self.abspath(destpath + '/' + item))
+                else:
+                    files.append(item)
+                #end if
+            elif self.isdir( destpath + '/' + item ):
+                if request_abspath_shown:
+                    directories.append(self.abspath(destpath + '/' + item))
+                else:
+                    directories.append(item)
+                #end if
+            else:
+                pass
+            #end if
+        files.sort()
+        directories.sort()
+        return {'files':files, 'directories':directories}
+
+    # Reading Function
+    def read(self, filename = '', mode = READ_NORMAL):
+        if filename == '':
+            # read stdin by default
+            return sys.stdin.read()
+        if mode == READ_PICKLE:
+            # use pickle for reading
+            if not self.size(filename) > 0:
+                return None
+            data = cPickle.load(open(filename, 'rb'))
+            return data
+
+        # This part does not use pickle.
+        if not self.isfile(filename):
+            return None
+        data = open(filename, mode).read()
+        return data
+
+    # Web Data Fetching Function
+    def readWeb(self, url):
+        try:
+            import pycurl
+            rp = pycurl.Curl()
+            rp.setopt(pycurl.URL, url)
+            rp.perform()
+            return rp.getinfo(pycurl.HTTP_CODE)
+        except:
+            return None
+
+    # Writing Function
+    def write(self, filename, data, mode = WRITE_NORMAL):
+        if mode == WRITE_PICKLE:
+            # use pickle for writing
+            #if self.exists(filename):
+            #    os.unlink(filename)
+            try:
+                fp = open(filename, 'wb')
+                cPickle.dump(data, fp)
+                fp.close()
+                return True
+            except:
+                return False
+
+        # This part does not use pickle.
+        if self.isfile(filename):
+            os.unlink(filename)
+        try:
+            fp = open(filename, mode)
+            fp.write(data)
+            fp.close()
+        except:
+            return False
+        return True
+
+    # Removal Function
+    def remove(self, destpath):
+        if self.isdir(destpath):
+            os.removedirs(destpath)
+            return True
+        elif self.isfile(destpath):
+            os.unlink(destpath)
+            return True
+        return False
+
+class YotsubaPackageXML:
+    rule_descendantCombinator = ' '
+    rule_childCombinator = '>'
+    rule_adjacentSiblingCombinator = '+'
+    rule_generalSiblingCombinator = '~'
+    specialRules = [
+        rule_childCombinator,
+        rule_adjacentSiblingCombinator,
+        rule_generalSiblingCombinator
+    ]
+    trees = {}
+    locks = {}
+    runningThreads = {}
+    exitedThreads = {}
+    sharedMemory = {}
+    
+    def __init__(self):
+        """
+        This package is a breakthrough of XML parsers in Python using
+        basic CSS3-selector method, instead of XPath.
+        
+        This is a prototype.
+        """
+        self.locks['referencing'] = thread.allocate_lock()
+    
+    def read(self, treeName, source):
+        """
+        Read and parse either a XML-formatted string or a XML document file and
+        store for querying.
+        """
+        tree = None
+        treeOrg = None
+        core.log.report('sdk.xml.read')
+        try:
+            if fs.exists(source):
+                treeOrg = xml.dom.minidom.parse(source)
+            else:
+                treeOrg = xml.dom.minidom.parseString(source)
+        except:
+            core.log.report(
+                '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
+                sys.exc_info()[0],
+                core.log.errorLevel
+            )
+            return False
+        try:
+            for node in treeOrg.childNodes:
+                if not node.nodeType == node.ELEMENT_NODE:
+                    continue
+                tree = self.buildTreeOnTheFly(node)
+                break
+            self.trees[treeName] = tree
+        except:
+            core.log.report(
+                '[sdk.xml.read] Tree creation raised errors.\n\t%s' % sys.exc_info()[0],
+                core.log.errorLevel
+            )
+            return False
+        del treeOrg
+        return True
+    
+    def query(self, treeName, selector, useMultiThread = False):
+        """
+        Query for elements according to the supplied combination of CSS-3 selectors.
+        """
+        # If `treeName` and `selector` are not of type string, returns an empty list.
+        if not type(selector) == str or  not type(treeName) == str:
+            core.log.report(
+                '[sdk.xml.query] unexpected types of treeName and selector',
+                core.log.warningLevel
+            )
+            # return nothing if either no treeName or no selector is not a string
+            return self.queriedNodes([])
+        else:
+            pass
+        # If there is no reference to the tree named by `treeName`, return an empty list.
+        if type(treeName) == str and not self.trees.has_key(treeName):
+            core.log.report(
+                '[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
+                core.log.warningLevel
+            )
+            # return nothing if there is not a tree called by treeName
+            return self.queriedNodes([])
+        else:
+            pass
+        # Creates a selector reference
+        selectorReference = sdk.crypt.hash(selector, ['sha'])
+        # Initializes the list of queried nodes
+        resultList = []
+        self.sharedMemory[selectorReference] = []
+        # Gets the reference to the root node
+        startupNode = None
+        try:
+            startupNode = self.trees[treeName]
+        except:
+            startupNode = treeName
+        # Queries cleanup (Clear out the tab character)
+        selector = re.sub("\t", " ", selector)
+        # Engroups
+        queries = re.split("\,", selector)
+        # Allocates for a locks
+        self.locks[selectorReference] = thread.allocate_lock()
+        if useMultiThread:
+            self.locks[selectorReference].acquire()
+            self.runningThreads[selectorReference] = []
+            self.exitedThreads[selectorReference] = []
+        
+        for query in queries:
+            # Multi-threading feature
+            if useMultiThread:
+                if query in self.runningThreads[selectorReference]:
+                    continue
+                self.runningThreads[selectorReference].append(query)
+                thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
+            else:
+                self.queryWithOneSelector(selectorReference, startupNode, query, False)
+        
+        self.locks[selectorReference].acquire()
+        resultList = self.sharedMemory[selectorReference]
+        self.locks[selectorReference].release()
+        
+        if useMultiThread:
+            self.locks['referencing'].acquire()
+            while self.locks[selectorReference].locked():
+                pass
+            del self.sharedMemory[selectorReference]
+            del self.runningThreads[selectorReference]
+            del self.exitedThreads[selectorReference]
+            del self.locks[selectorReference]
+            try:
+                self.locks['referencing'].release()
+            except:
+                print "Removing referencing denied"
+        return self.queriedNodes(resultList)
+    
+    def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
+        """
+        Query for elements by a single combination of CSS-3 selectors. This is
+        not meant to be used directly. Please use query(...) instead.
+        """
+        # Gets the path
+        combination = re.split("\ +", query.strip())
+        if len(combination) > 0:
+            try:
+                self.sharedMemory[selectorReference].extend(
+                    self.traverse(startupNode, combination)
+                )
+                if useMultiThread:
+                    self.exitedThreads[selectorReference].append(query)
+            except:
+                core.log.report(
+                    "Shared Memory [%s] not available" % selectorReference,
+                    core.log.errorLevel
+                )
+            if not selectorReference in self.runningThreads and useMultiThread:
+                thread.exit()
+            if useMultiThread and len(self.runningThreads[selectorReference]) == len(self.exitedThreads[selectorReference]):
+                try:
+                    self.locks[selectorReference].release()
+                except:
+                    core.log.report(
+                        "Lock [%s] already released" % selectorReference,
+                        core.log.errorLevel
+                    )
+        else:
+            core.log.report(
+                "No operation [%s]" % selectorReference,
+                core.log.errorLevel
+            )
+    
+    def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
+        """
+        Performs querying at the low level on the tree. This function is
+        different from query() that it's querying based on each position.
+        The speed complexity is O(n) where n is the number of nodes.
+        
+        Please notes that this function treats the parameter node as the
+        root of a subtree of its origin.
+        
+        See http://doc.shiroyuki.com/lib/Yotsuba_SDK_XML_Package#def_traverse.28node.2C_selector.2C_selectorLevel.2C_poleNode.2C_singleSiblingSearch.29
+        for the description of parameters
+        """
+        try:
+            rule = self.rule_descendantCombinator
+            # If there is no selector, return an empty list
+            if selectorLevel >= len(selector):
+                return []
+            if selector[selectorLevel] in self.specialRules:
+                selectorLevel += 1
+                try:
+                    rule = selector[selectorLevel - 1]
+                except:
+                    core.log.report(
+                        '%d:%s\n\t|_ Failed to determine the special rule' % (node.level, node.name()),
+                        core.log.warningLevel
+                    )
+            # If two or more rules are specified consecutively, regards this selector as ill-formatted
+            if selector[selectorLevel] in self.specialRules:
+                return []
+            # Makes the selector object
+            s = self.makeSelectorObject(selector[selectorLevel])
+            # First, check if the current element is on the path regardless to the attributes and some filtering options
+            isTheNodeOnThePath = \
+                ( \
+                    s.name() == '*' \
+                ) or ( \
+                    s.name() == '' \
+                    and ( \
+                        len(s.attr().keys()) > 0 \
+                        or len(s.filter()) > 0 \
+                    ) \
+                ) or ( \
+                    s.name() == node.name() \
+                )
+            # Second, uses attributes to filter out the element that is not qualified.
+            # (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
+            if isTheNodeOnThePath:
+                for attrIndex in s.attr().keys():
+                    # Check if the selector requires the element to have this specific attribute `attrIndex`
+                    if s.attr(attrIndex)[1] == None:
+                        if not node.hasAttr(attrIndex):
+                            isTheNodeOnThePath = False
+                            break
+                    # Check if the selector requires the element to have this attribute `attrIndex` with
+                    # the specific value.
+                    else:
+                        # Annoying check for slipped errors
+                        if len(node.attr(attrIndex)) == 0:
+                            isTheNodeOnThePath = False
+                            break
+                        # Then, real check
+                        else:
+                            # Get the list of the values, separated by tab character or white spaces.
+                            s_attrValueList = re.split("(\t| )+", node.attr(attrIndex))
+                            # Check the rules are BROKEN
+                            if not (s.attr(attrIndex)[0] == '=' and node.attr(attrIndex) == s.attr(attrIndex)[1])\
+                               and not (s.attr(attrIndex)[0] == '|=' and re.match("^(%s)-.*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                               and not (s.attr(attrIndex)[0] == '*=' and re.match(".*(%s).*" % s.attr(attrIndex)[1], node.attr(attrIndex)))\
+                               and not (s.attr(attrIndex)[0] == '~=' and s.attr(attrIndex)[1] in s_attrValueList)\
+                               and not (s.attr(attrIndex)[0] == '$=' and s.attr(attrIndex)[1] == s_attrValueList[-1])\
+                               and not (s.attr(attrIndex)[0] == '^=' and s.attr(attrIndex)[1] == s_attrValueList[0]):
+                                isTheNodeOnThePath = False
+                                break
+                            # Otherwise this is on the path
+                            else:
+                                pass
+            # Third, check the filters
+            if isTheNodeOnThePath:
+                for filterOption in s.filter():
+                    if filterOption == 'root' and not node.level == 0:
+                        isTheNodeOnThePath = False
+                        break
+                    elif filterOption == 'empty' and (len(node.children) > 0 or node.data()):
+                        isTheNodeOnThePath = False
+                        break
+            # Check if this node is on the selector path but not the destination
+            if isTheNodeOnThePath:
+                selectorLevel += 1
+            # Allocate the memory of the result list
+            resultList = []
+            # Check the rule
+            # Handle a child combinator
+            if rule == self.rule_childCombinator:
+                if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
+                    return [node]
+                else:
+                    core.log.report(
+                        '%d:%s (Limit break, Force-stop)' % (node.level, node.name()),
+                        core.log.codeWatchLevel
+                    )
+                    return []
+            # Handle a heirarchy combinator
+            elif rule == self.rule_descendantCombinator:
+                # If the node is on the path and it is the end of the path
+                if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
+                    # If the last element required on the path is a wild card,
+                    # keeps the iterator going to the bottom of the tree.
+                    if self.makeSelectorObject(selector[-1]).name() == '*':
+                        selectorLevel -= 1
+                    else: pass
+                    resultList.append(node)
+                cnodeIndex = -1
+                doSkip = True
+                for cnode in node.children:
+                    cnodeIndex += 1
+                    # This is the last node to be skipped based on the poleNode.
+                    if poleNode and poleNode.name() == cnode.name() and poleNode.level == cnode.level:
+                        doSkip = False
+                        continue
+                    # Skips if this node comes before the poleNode.
+                    if poleNode and doSkip:
+                        continue
+                    # If this is the single sibling search, skips the next
+                    # sibling until it meets the criteria.
+                    if singleSiblingSearch:
+                        doSkip = True
+                    # Adds the child node to the result list
+                    resultList.extend(self.traverse(cnode, selector, selectorLevel))
+                return resultList
+            # Handles an adjacent sibling combinator (get one next sibling)
+            elif rule == self.rule_adjacentSiblingCombinator:
+                resultList.extend(
+                    self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
+                )
+                return resultList
+            # Handles a general sibling combinator (get all next siblings)
+            elif rule == self.rule_generalSiblingCombinator:
+                resultList.extend(
+                    self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
+                )
+                return resultList
+            # No rule applied
+            else:
+                return []
+        except:
+            core.log.report(
+                '[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0]),
+                core.log.errorLevel
+            )
+            return []
+    
+    def makeSelectorObject(self, selectorObjectString):
+        """
+        Makes a selector object with a selector-object string (a tag name with or without attributes).
+        Returns a null object if the selectorObjectString is not well-formatted.
+        
+        A well-formatted selector objects should be in the following patterns.
+        - element
+        - element[attrName]
+        - element[attrName=attrValue]
+        - element[attrName^=attrValue]
+        - element[attrName$=attrValue]
+        - element[attrName~=attrValue]
+        - element[attrName*=attrValue]
+        - element[attrName|=attrValue]
+        - element[attrName1=attrValue1][attrName2=attrValue2]...[attrNameN=attrValueN]
+        - element[...]:filter1:filter2:...:filterN
+        
+        (Source: http://docs.jquery.com/Selectors)
+        (Source: http://www.w3.org/TR/css3-selectors/#selectors)
+        """
+        
+        SOName = ''
+        SOOptions = ''
+        SOAttrs = ''
+        SOFilters = ''
+        RE_Attr = re.compile(".*\[.*")
+        RE_Filter = re.compile(".*:.*")
+        if RE_Attr.match(selectorObjectString) and RE_Filter.match(selectorObjectString):
+            # Extract the tag name and its options/filters
+            SOName, SOOptions = re.split("\[", selectorObjectString, 1)
+            # Extract the attribute filters and the selecting filters
+            SOAttrs, SOFilters = re.split(":", SOOptions, 1)
+        elif RE_Attr.match(selectorObjectString) and not RE_Filter.match(selectorObjectString):
+            # Extract the tag name and its options/filters
+            SOName, SOOptions = re.split("\[", selectorObjectString, 1)
+            # Extract the attribute filters and the selecting filters
+            SOAttrs = SOOptions
+        elif not RE_Attr.match(selectorObjectString) and RE_Filter.match(selectorObjectString):
+            # Extract the tag name and its options/filters
+            SOName, SOOptions = re.split(":", selectorObjectString, 1)
+            # Extract the attribute filters and the selecting filters
+            SOFilters = SOOptions
+        else:
+            SOName = selectorObjectString
+        # Free memory
+        del SOOptions
+        # Check the requirement
+        if (len(SOAttrs) > 0 and not re.match(".+\]$", SOAttrs)) or re.match(".*:$", SOFilters):
+            return None
+        # Engroup attributes
+        SOAttrs = re.split("\]\[", SOAttrs[:-1])
+        # Engroup filters
+        SOFilters = re.split(":", SOFilters)
+        # Prepare to make an object
+        SOAttrsRaw = SOAttrs
+        SOAttrs = {}
+        for SOAttr in SOAttrsRaw:
+            if re.match("[a-zA-Z0-9_\-]+=.+", SOAttr):
+                k, v = re.split("=", SOAttr, 1)
+                SOAttrs[k] = ['=', v]
+            elif re.match("[a-zA-Z0-9_\-]+\|=.+", SOAttr):
+                k, v = re.split("\|=", SOAttr, 1)
+                SOAttrs[k] = ['|=', v]
+            elif re.match("[a-zA-Z0-9_\-]+\^=.+", SOAttr):
+                k, v = re.split("\^=", SOAttr, 1)
+                SOAttrs[k] = ['^=', v]
+            elif re.match("[a-zA-Z0-9_\-]+\$=.+", SOAttr):
+                k, v = re.split("\$=", SOAttr, 1)
+                SOAttrs[k] = ['$=', v]
+            elif re.match("[a-zA-Z0-9_\-]+\*=.+", SOAttr):
+                k, v = re.split("\*=", SOAttr, 1)
+                SOAttrs[k] = ['*=', v]
+            elif re.match("[a-zA-Z0-9_\-]+\~=.+", SOAttr):
+                k, v = re.split("\~=", SOAttr, 1)
+                SOAttrs[k] = ['~=', v]
+            elif re.match("[a-zA-Z0-9_\-]+", SOAttr):
+                k = SOAttr
+                SOAttrs[k] = [None, None]
+        if SOName == '' and (len(SOAttrs) == 0 or len(SOFilters) == 0):
+            return None
+        return self.selectorObject(SOName, SOAttrs, SOFilters)
+        
+    
+    def isTheEndOfPathReached(self, selector, selectorLevel):
+        """
+        Check if the code walk to the end of the selector.
+        This is not meant to be used directly.
+        """
+        try:
+            return selectorLevel >= len(selector) - selector.count('>') - selector.count('+') - selector.count('~')
+        except:
+            return False
+    
+    def buildTreeOnTheFly(self, node, parentNode = None, level = 0, levelIndex = 0):
+        """
+        Construct an XML tree for query.
+        This is not meant to be used directly.
+        """
+        if not node.nodeType == node.ELEMENT_NODE:
+            # Ignore non-element node
+            return None
+        try:
+            # Class-node instance of the parameter `node`
+            treeNode = self.node(node, parentNode, level, levelIndex)
+            if len(node.childNodes) > 0:
+                core.log.report('%d:%s > Constructing children' % (level, treeNode.name()), core.log.codeWatchLevel)
+                cnodeIndex = -1
+                for cnode in node.childNodes:
+                    try:
+                        cnodeIndex += 1
+                        childNode = self.buildTreeOnTheFly(cnode, treeNode, level + 1, cnodeIndex)
+                        if childNode == None:
+                            continue
+                        core.log.report('%d:%s/%s' % (level, treeNode.name(), childNode.name()), core.log.codeWatchLevel)
+                        treeNode.children.append(childNode)
+                    except:
+                        core.log.report(
+                            '[sdk.xml.buildTreeOnTheFly] Childen creation failed\n\t%s' % sys.exc_info()[0],
+                            core.log.errorLevel
+                        )
+                        return None
+                core.log.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), core.log.codeWatchLevel)
+            return treeNode
+        except:
+            core.log.report(
+                '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
+                core.log.errorLevel
+            )
+            return None
+    
+    class node:
+        level = 0
+        element = None
+        children = None
+        parentElement = None
+        hash = None
+        
+        def __init__(self, element, parent = None, level = 0, levelIndex = 0):
+            self.level = level
+            self.element = element
+            self.children = []
+            self.parentElement = parent
+            self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
+        
+        def parent(self):
+            return self.parentElement
+        
+        def name(self):
+            return self.element.tagName
+        
+        def attr(self, attrName):
+            return self.element.getAttribute(attrName)
+        
+        def hasAttr(self, attrName):
+            return self.element.hasAttribute(attrName)
+        
+        def data(self):
+            try:
+                if not self.element.hasChildNodes():
+                    # Empty node
+                    return ''
+                resultData = []
+                for dataNode in self.element.childNodes:
+                    try:
+                        if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
+                            # Ignore non-data node
+                            del resultData
+                            return ''
+                        resultData.append(dataNode.data)
+                    except:
+                        # Malform XML document
+                        del resultData
+                        return ''
+                return '\n'.join(resultData)
+            except:
+                return ''
+        
+        def child(self, indexNumber = 0):
+            try:
+                return self.children[indexNumber]
+            except:
+                return []
+    
+    class queriedNodes:
+        elements = None
+        
+        def __init__(self, elements):
+            self.elements = []
+            for element in elements:
+                if element in self.elements:
+                    continue
+                self.elements.append(element)
+        
+        def eq(self, indexNumber = 0):
+            try:
+                return self.elements[indexNumber]
+            except:
+                return None
+        
+        def data(self):
+            output = []
+            for element in self.elements:
+                output.append(element.data())
+            return ''.join(output)
+        
+        def length(self):
+            return len(self.elements)
+    class selectorObject:
+        SOName = None
+        SOAttrs = None
+        SOFilters = None
+        
+        def __init__(self, name, attrs = {}, filters = []):
+            self.SOName = name
+            if type(attrs) == dict:
+                self.SOAttrs = attrs
+            else:
+                self.SOAttrs = {}
+            if type(filters) == list:
+                self.SOFilters = filters
+            else:
+                self.SOFilters = []
+        
+        def name(self):
+            return self.SOName
+        
+        def attr(self, attrName = None):
+            if not attrName:
+                return self.SOAttrs
+            try:
+                return self.SOAttrs[attrName]
+            except:
+                return [None, '']
+        
+        def filter(self):
+            return self.SOFilters
 
 class MailerObject:
     _server = None
@@ -1544,9 +1712,17 @@ class MailMessage:
         except:
             return False
 
+# [Legacy module structure for Yotsuba 2.0a2]
 core = YotsubaCore()
 sdk = YotsubaSDK()
 fw = YotsubaFW()
+
+# [New Code for Yotsuba 2.0a3]
+# File System Interface
+fs = YotsubaPackageFileSystemInterface()
+
+# Kotoba: An XML Query Representative
+kotoba = YotsubaPackageXML()
 
 if __name__ == '__main__':
     #core.multiThreadTest();
