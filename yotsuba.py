@@ -1085,6 +1085,11 @@ class YotsubaPackageXML:
             if rule == self.rule_childCombinator:
                 if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
                     return [node]
+                #elif isTheNodeOnThePath and not self.isTheEndOfPathReached(selector, selectorLevel):
+                #    for cnode in node.children:
+                #        # Adds the child node to the result list
+                #        resultList.extend(self.traverse(cnode, selector, selectorLevel))
+                #    return resultList
                 else:
                     core.log.report(
                         '%d:%s (Limit break, Force-stop)' % (node.level, node.name()),
@@ -1139,6 +1144,7 @@ class YotsubaPackageXML:
                 '[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0]),
                 core.log.errorLevel
             )
+            raise '[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0])
             return []
     
     def makeSelectorObject(self, selectorObjectString):

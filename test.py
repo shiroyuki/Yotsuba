@@ -19,13 +19,16 @@ showOutput = True
 output = []
 forceShowLog = False
 forceHideLog = False
-numOfStressTests = 200
+numOfStressTests = 1
 numOfCases = 0
 numOfFailedCases = 0
 
 def tPrint(message):
     global output
-    output.append(str(message))
+    try:
+        output.append(str(message))
+    except:
+        output.append(message)
 
 def tPrintMessage():
     global showOutput
@@ -83,7 +86,7 @@ def testingProcedure():
         raise "Cannot read test.xml"
     if not yotsuba.kotoba.read("test", "test.xml"):
         raise "Cannot parse test.xml"
-    tEqual("XML Tree Construction", len(yotsuba.kotoba.trees['test'].children), 6)
+    tEqual("XML Tree Construction", len(yotsuba.kotoba.trees['test'].children), 7)
     tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child().name(), 'a')
     tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child().parent().name(), 'root')
     # sdk.xml > Existance tests
@@ -109,15 +112,20 @@ def testingProcedure():
         'common[name$=dha]': 0,
         'common[name*=am]': 1,
         '[name=c]': 1,
+        'root l1 > l2b > l3b': 1,
+        'root l1 > l2b > l3c': 1,
+        'l1 l2b > l3c > l4c': 1,
+        'root > c > c2': 1,
+        'root > c c2': 1,
         'root common': 4,
         'root * common': 4,
-        'root *': 20,
+        'root *': 33,
         'root:root': 1,
         'root:root:empty': 0,
         'c:root': 0,
         'b:empty': 1,
         'c:empty': 0,
-        '*': 21,
+        '*': 34,
         'c common': 1,
         'c + d': 1,
         'c ~ e': 2,
@@ -130,7 +138,7 @@ def testingProcedure():
     for pqK, pqV in passedQueries.iteritems():
         tEqual("XML Query Test / Correctness (%s)" % pqK, yotsuba.kotoba.query('test', pqK).length(), pqV)
     # sdk.xml > Data extraction tests
-    tEqual("XML Query Test (Data)", yotsuba.kotoba.query('test', 'c c1').data(), yotsuba.kotoba.trees['test'].children[2].children[0].data())
+    tEqual("XML Query Test (Data)", yotsuba.kotoba.query('test', 'c c1').data(), yotsuba.kotoba.trees['test'].children[3].children[0].data())
     # sdk.xml > Selector-object tests
     passedQueries = {
         'element': ['element', None, '', ''],
