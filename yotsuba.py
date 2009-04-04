@@ -1346,6 +1346,9 @@ class YotsubaPackageXML:
             except:
                 return None
         
+        def list(self):
+            return self.elements
+        
         def data(self):
             output = []
             for element in self.elements:
