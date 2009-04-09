@@ -5,15 +5,22 @@
 # License: LGPL
 
 # For testing features
-import os, sys, re, dircache
+import os
+import sys
+import re
 import StringIO
-import hashlib, base64
+import hashlib
+import base64
 import xml.dom.minidom
 import cPickle
 import pickle
-import cgi, Cookie
-import mimetypes, MimeWriter
-import email, poplib, imaplib, smtplib
+import Cookie
+import mimetypes
+import MimeWriter
+import email
+import poplib
+import imaplib
+import smtplib
 
 # For experimental features
 import thread, threading
@@ -22,7 +29,7 @@ PROJECT_TITLE = "Yotsuba"
 PROJECT_CODENAME = "Kotoba"
 PROJECT_MAJOR_VERSION = 2
 PROJECT_MINOR_VERSION = 0
-PROJECT_STATUS = "experimental"
+PROJECT_STATUS = "beta"
 PROJECT_VERSION = "%d.%d (%s)" % (PROJECT_MAJOR_VERSION, PROJECT_MINOR_VERSION, PROJECT_STATUS)
 PROJECT_SIGNATURE = "%s/%s %s" % (PROJECT_TITLE, PROJECT_CODENAME, PROJECT_VERSION)
 
@@ -42,593 +49,380 @@ WRITE_NORMAL    = 'w'
 WRITE_BINARY    = 'wb'
 WRITE_PICKLE    = 'pickle::write'
 
-global core
-global sdk
-global fw
-global config
-config = {}
+class YotsubaPackageSystemLog:
+    # Local configuration
+    maxAllowedLevel = 2
+    # Flags
+    noticeLevel = 0
+    warningLevel = 1
+    errorLevel = 2
+    codeWatchLevel = 3
+    # Storage
+    logs = []
+    # Indicator
+    hasError = False
 
-def config(source, value = None, force_to_reload = False):
-    """
-    This function is to update and possibly append
-    the configuration of the SDK specifically for
-    one session of execution.
-
-    The parameter `source` can be either types `str` (string)
-    or `dict` (dictionary). If it is of type string and the
-    parameter `value` is set, this function treats the string
-    `source` as a key variable. Otherwise, it treats the
-    parameter `source` as a filename.
-
-    The parameter `force_to_reload` is optional, used when
-    you want to force the function to wipe out the current
-    configuration and load the currently submitted one.
-    """
-    if type(source) == dict:
-        config.update(source)
-    if type(source) == str:
-        if not value:
-            # Require XML module
-            pass
-            #YotsubaSDKPackage.fs.read(source)
-        else:
-            config[source] = value
-
-class YotsubaCorePackage:
-    """
-    Yotsuba's Core package is designed to handle any low-level operations (I/O operations etc.) and initialization.
-    """
-    class fs:
-        # Make directory
-        def mkdir(self, destpath):
-            try:
-                os.mkdir(destpath)
-                return True
-            except:
-                return False
-
-        # Check the size of file or directory
-        def size(self, destpath):
-            size = int(os.stat(destpath)[6])
-            return size
-
-        # Friendly Path Identifier
-        def abspath(self, destpath, request_relative_path_fixed = False):
-            if request_relative_path_fixed:
-                if not re.compile('^/').match(destpath):
-                    destpath = '/' + destpath
-                return os.path.abspath( os.getcwd() + destpath )
+    def report(self, content, level = 0):
+        if level == self.errorLevel:
+            self.hasError = True
+        self.logs.append(self.LogObject(content, level))
+    def export(self, level = -1, onlyOneLevel = False, toArray = False):
+        """
+        Export logs as a hash table
+        """
+        table = []
+        for log in self.logs:
+            if log.level < level:
+                continue
+            textMessage = ''
+            if log.level == self.noticeLevel:
+                textMessage = 'Note'
+            elif log.level == self.warningLevel:
+                textMessage = 'Warn'
+            elif log.level == self.errorLevel:
+                textMessage = 'Error'
+            elif log.level == self.codeWatchLevel:
+                textMessage = 'Watch'
             else:
-                return os.path.abspath( destpath )
+                textMessage = 'Alert'
+            textMessage += ':\t' + log.content
+            table.append(textMessage)
+        return '\n'.join(table)
+    class LogObject:
+        """
+        The object class of log message
+        """
+        # 0: Notification (Default)
+        # 1: Warning
+        # 2: Error
 
-        # Symbol-instance checker
-        def checkType(self, destpath):
-            if not os.path.exists(destpath):
-                return -1
-            if os.path.isfile( self.abspath( destpath) ) or (os.path.islink( self.abspath( destpath ) ) and os.path.isfile( self.abspath( destpath) ) ):
-                return FILE
-            return DIRECTORY
+        content = ''
+        level = 0
+        time = None
+        def __init__(self, content, level = 0):
+            self.content = content
+            self.level = level
 
-        def exists(self, destpath):
-            return    os.access(os.path.abspath(destpath), os.F_OK)
 
-        def readable(self, destpath):
-            return    os.access(os.path.abspath(destpath), os.R_OK)
+class YotsubaPackageTimeMaster:
+    """
+    This package is the simple version of the time object in Python.
+    """
+    def getTimeCodeInteger(self, timeObject = None):
+        from time import gmtime, strftime
+        if not timeObject:
+            timeObject = gmtime()
+        return int(strftime("%Y%m%d%H%M", timeObject))
 
-        def writable(self, destpath):
-            return    os.access(os.path.abspath(destpath), os.W_OK)
+    def readTimeCode(self, timeCode):
+        result = [0, 0, 0, 0, 0]
+        try:
+            for i in range(5):
+                result[i] = int(timecode/pow(10, 8 - 2*i))
+                result.append(str(result[i]))
+                red_timecode = int(result[i]*pow(10, 8 - 2*i))
+                timecode -= red_timecode
+        except:
+            syslog.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', syslog.errorLevel)
+        return result
 
-        def executable(self, destpath):
-            return    os.access(os.path.abspath(destpath), os.X_OK)
 
-        def isfile(self, destpath):
-            return     self.checkType(destpath) == FILE
 
-        def isdir(self, destpath):
-            return    self.checkType(destpath) == DIRECTORY
+class YotsubaPackageCryptographer:
+    cryptographicDepthLevel = 10
 
-        # Browsing Function
-        def browse(self, destpath, request_abspath_shown = False, filter = None, filterToSearch = False):
-            # Check if this is a directory
-            if not self.isdir( self.abspath( destpath ) ) or not self.readable( self.abspath(destpath) ):
-                return None
-            # Get the list of items
-            dls = os.listdir(destpath)
-            # Classify each item
-            files = []
-            directories = []
-            ref = None
-            if filter:
-                ref = re.compile(filter)
-            for item in dls:
-                if ref:
-                    # if matched not in search mode, filter out.
-                    # then, `unmatched` items kept
-                    if ref.match(item) and not filterToSearch: continue
-                    # if unmatched in search mode, filter out.
-                    # then, `matched` items kept
-                    if not ref.match(item) and filterToSearch: continue
-                if self.isfile( destpath + '/' + item ):
-                    if request_abspath_shown:
-                        files.append(self.abspath(destpath + '/' + item))
-                    else:
-                        files.append(item)
-                    #end if
-                elif self.isdir( destpath + '/' + item ):
-                    if request_abspath_shown:
-                        directories.append(self.abspath(destpath + '/' + item))
-                    else:
-                        directories.append(item)
-                    #end if
-                else:
-                    pass
-                #end if
-            files.sort()
-            directories.sort()
-            return {'files':files, 'directories':directories}
+    def serialise(self, dataObject):
+        return cPickle.dumps(dataObject, pickle.HIGHEST_PROTOCOL)
 
-        # Reading Function
-        def read(self, filename = '', mode = READ_NORMAL):
-            if filename == '':
-                # read stdin by default
-                return sys.stdin.read()
-            if mode == READ_PICKLE:
-                # use pickle for reading
-                if not self.size(filename) > 0:
-                    return None
-                data = cPickle.load(open(filename, 'rb'))
-                return data
+    def revertSerialise(self, serialisedData):
+        return cPickle.loads(serialisedData)
 
-            # This part does not use pickle.
-            if not self.isfile(filename):
-                return None
-            data = open(filename, mode).read()
-            return data
+    def hash(self, text, hashPackage = None):
+        rstring = ''
+        hashdict = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'ripemd160']
+        if hashPackage:
+            hashdict = hashPackage
+        for hashalg in hashdict:
+            m = hashlib.new(hashalg)
+            m.update(text)
+            rstring += m.hexdigest()
+        return rstring
 
-        # Web Data Fetching Function
-        def readWeb(self, url):
-            try:
-                import pycurl
-                rp = pycurl.Curl()
-                rp.setopt(pycurl.URL, url)
-                rp.perform()
-                return rp.getinfo(pycurl.HTTP_CODE)
-            except:
-                return None
+    def encrypt(self, text):
+        rstring = text
+        for loopindex in range(0, self.cryptographicDepthLevel):
+            rstring = base64.b64encode(rstring)
+        return rstring
 
-        # Writing Function
-        def write(self, filename, data, mode = WRITE_NORMAL):
-            if mode == WRITE_PICKLE:
-                # use pickle for writing
-                #if self.exists(filename):
-                #    os.unlink(filename)
-                try:
-                    fp = open(filename, 'wb')
-                    cPickle.dump(data, fp)
-                    fp.close()
-                    return True
-                except:
-                    return False
+    def decrypt(self, text):
+        rstring = text
+        for loopindex in range(0, self.cryptographicDepthLevel):
+            rstring = base64.b64decode(rstring)
+        return rstring
 
-            # This part does not use pickle.
-            if self.isfile(filename):
-                os.unlink(filename)
-            try:
-                fp = open(filename, mode)
-                fp.write(data)
-                fp.close()
-            except:
-                return False
+class YotsubaPackageBlog:
+    """
+    yotsuba.sdk.log
+
+    Content intepretation and log-base processing package
+    """
+
+    # Add slashes to the given string
+    def addslashes(self, string):
+        return re.sub("'", "\\'", string)
+
+    # Convert a given context to a wiki-like content.
+    # This function uses the same rule that mediawiki uses.
+    def convert_to_wiki(self, content):
+        raw_lines = re.split('(\r\n|\n|\r)', content)
+        lines = []
+        result = []
+        for line in raw_lines:
+            lines.append(re.split('( |<.*>)', line))
+            for i in range(0, len(lines[-1])):
+                if re.match('(http|https|ftp|sftp|irc)\://', lines[-1][i]):
+                    temp = re.sub('^\.+', '', lines[-1][i])
+                    temp = re.sub('\.+$', '', temp)
+                    temp_link = '<a href="%s">%s</a>' % (temp, temp)
+                    content = re.sub(temp, temp_link, content)
+        return content
+
+class YotsubaPackageMail:
+    defaultMessageSubject = 'Untitled Message'
+    re_validEmailAddress = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
+    connectionNodes = {}
+    messages = {}
+
+    def validateEmailAddress(self, emailAddr):
+        return not self.re_validEmailAddress.match(emailAddr) == None
+
+    def addConnection(self, connectionName):
+        if self.connectionNodes.has_key(connectionName):
+            return False
+        # Add a connection node
+        self.connectionNodes[connectionName] = None
+        return True
+
+    def removeConnection(self, connectionName):
+        try:
+            del self.connectionNodes[connectionName]
             return True
-
-        # Removal Function
-        def remove(self, destpath):
-            if self.isdir(destpath):
-                os.removedirs(destpath)
-                return True
-            elif self.isfile(destpath, True):
-                os.unlink(destpath)
-                return True
+        except:
             return False
 
-    class log:
-        # Local configuration
-        maxAllowedLevel = 2
-        # Flags
-        noticeLevel = 0
-        warningLevel = 1
-        errorLevel = 2
-        codeWatchLevel = 3
-        # Storage
-        logs = []
-        # Indicator
-        hasError = False
-        
-        def report(self, content, level = 0):
-            if level == self.errorLevel:
-                self.hasError = True
-            self.logs.append(self.logObject(content, level))
-        def export(self, level = -1, onlyOneLevel = False, toArray = False):
-            """
-            Export logs as a hash table
-            """
-            table = []
-            for log in self.logs:
-                if log.level < level:
-                    continue
-                textMessage = ''
-                if log.level == self.noticeLevel:
-                    textMessage = 'Note'
-                elif log.level == self.warningLevel:
-                    textMessage = 'Warn'
-                elif log.level == self.errorLevel:
-                    textMessage = 'Error'
-                elif log.level == self.codeWatchLevel:
-                    textMessage = 'Watch'
-                else:
-                    textMessage = 'Alert'
-                textMessage += ':\t' + log.content
-                table.append(textMessage)
-            return '\n'.join(table)
-        class logObject:
-            """
-            The object class of log message
-            """
-            # 0: Notification (Default)
-            # 1: Warning
-            # 2: Error
-            
-            content = ''
-            level = 0
-            time = None
-            def __init__(self, content, level = 0):
-                self.content = content
-                self.level = level
+    def connection(self, connectionName):
+        return self.connectionNodes
 
-class YotsubaSDKPackage:
-    class time:
-        """
-        This package is the simple version of the time object in Python.
-        """
-        def getTimeCodeInteger(self, timeObject = None):
-            from time import gmtime, strftime
-            if not timeObject:
-                timeObject = gmtime()
-            return int(strftime("%Y%m%d%H%M", timeObject))
-        
-        def readTimeCode(self, timeCode):
-            result = [0, 0, 0, 0, 0]
-            try:
-                for i in range(5):
-                    result[i] = int(timecode/pow(10, 8 - 2*i))
-                    result.append(str(result[i]))
-                    red_timecode = int(result[i]*pow(10, 8 - 2*i))
-                    timecode -= red_timecode
-            except:
-                core.log.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', core.log.errorLevel)
-            return result
-    
-    
+    def addMessage(self, messageName):
+        if self.messages.has_key(messageName):
+            return False
+        # Add a connection node
+        self.messages[messageName] = None
+        return True
 
-    class crypt:
-        cryptographicDepthLevel = 10
-        
-        def serialise(self, dataObject):
-            return cPickle.dumps(dataObject, pickle.HIGHEST_PROTOCOL)
-        
-        def revertSerialise(self, serialisedData):
-            return cPickle.loads(serialisedData)
-        
-        def hash(self, text, hashPackage = None):
-            rstring = ''
-            hashdict = ['md5', 'sha1', 'sha224', 'sha256', 'sha384', 'sha512', 'ripemd160']
-            if hashPackage:
-                hashdict = hashPackage
-            for hashalg in hashdict:
-                m = hashlib.new(hashalg)
-                m.update(text)
-                rstring += m.hexdigest()
-            return rstring
-
-        def encrypt(self, text):
-            rstring = text
-            for loopindex in range(0, self.cryptographicDepthLevel):
-                rstring = base64.b64encode(rstring)
-            return rstring
-
-        def decrypt(self, text):
-            rstring = text
-            for loopindex in range(0, self.cryptographicDepthLevel):
-                rstring = base64.b64decode(rstring)
-            return rstring
-
-    class log:
-        """
-        yotsuba.sdk.log
-
-        Content intepretation and log-base processing package
-        """
-
-        # Add slashes to the given string
-        def addslashes(self, string):
-            return re.sub("'", "\\'", string)
-
-        # Convert a given context to a wiki-like content.
-        # This function uses the same rule that mediawiki uses.
-        def convert_to_wiki(self, content):
-            raw_lines = re.split('(\r\n|\n|\r)', content)
-            lines = []
-            result = []
-            for line in raw_lines:
-                lines.append(re.split('( |<.*>)', line))
-                for i in range(0, len(lines[-1])):
-                    if re.match('(http|https|ftp|sftp|irc)\://', lines[-1][i]):
-                        temp = re.sub('^\.+', '', lines[-1][i])
-                        temp = re.sub('\.+$', '', temp)
-                        temp_link = '<a href="%s">%s</a>' % (temp, temp)
-                        content = re.sub(temp, temp_link, content)
-            return content
-
-    class mail:
-        defaultMessageSubject = 'Untitled Message'
-        re_validEmailAddress = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
-        connectionNodes = {}
-        messages = {}
-        
-        def validateEmailAddress(self, emailAddr):
-            return not self.re_validEmailAddress.match(emailAddr) == None
-        
-        def addConnection(self, connectionName):
-            if self.connectionNodes.has_key(connectionName):
-                return False
-            # Add a connection node
-            self.connectionNodes[connectionName] = None
+    def removeMessage(self, messageName):
+        try:
+            del self.messages[messageName]
             return True
-        
-        def removeConnection(self, connectionName):
-            try:
-                del self.connectionNodes[connectionName]
-                return True
-            except:
-                return False
-        
-        def connection(self, connectionName):
-            return self.connectionNodes
-        
-        def addMessage(self, messageName):
-            if self.messages.has_key(messageName):
-                return False
-            # Add a connection node
-            self.messages[messageName] = None
-            return True
-        
-        def removeMessage(self, messageName):
-            try:
-                del self.messages[messageName]
-                return True
-            except:
-                return False
-        
-        def message(self, messageName):
-            return self.messages[messageName]
-        
-        def send(self, connectionName, messageNames):
-            if type(messageName) == dict:
-                for messageName in messageNames:
-                    # send a message
-                    pass
-            else:
+        except:
+            return False
+
+    def message(self, messageName):
+        return self.messages[messageName]
+
+    def send(self, connectionName, messageNames):
+        if type(messageName) == dict:
+            for messageName in messageNames:
                 # send a message
                 pass
+        else:
+            # send a message
             pass
-        
-        def receive(self, connectionName):
-            pass
+        pass
 
-class YotsubaFWPackage:
-    class ec:
-        """
-        Environment Controller
-        """
-        
-        headers = {
-            'Content-Type': DEFAULT_CONTENT_TYPE
-        }
-        cookies = Cookie.SimpleCookie()
-        session = None
-        sessionPath = ''
-        
-        def env(self, keyIndex):
-            if os.environ.has_key(keyIndex):
-                return os.environ[keyIndex]
-            else:
-                return None
-        
-        def header(self, key = None, value = None, selfPrint = False):
-            if key:
-                try:
-                    if value and type(x) == str:
-                        self.headers[key] = value
-                    return self.headers[key]
-                except:
-                    core.log.report(
-                        "[fw.ec.header] failed to retrieve a value of header %s"\
-                        % key,
-                        core.log.warningLevel
-                    )
-            else:
-                lines = []
-                for k, v in headers.iteritems():
-                    lines.append('%s: %s' % (k, v))
-                result = '%s\n%s\n\n' % ('\n'.join(lines), self.printCookie())
-                if selfPrint:
-                    print result
-                return result
-        # Cookies
-        def cookie(self, key, newValue = ''):
-            if newValue == '':
-                cookies[key] = newValue
-            return cookies[key].value
-        
-        def printCookie(self):
-            return cookies.output()
-        
-        # Sessions
-        def session(self, key, newValue = None):
-            # Initialization
-            localRenewSession = False
-            # If the session data is not initialized, then the initialization will
-            # be preceeded first by default.
-            if not self.session:
-                self.session = self.sessionObject()
-                core.log.report("[fw.ec.session] Initialized the session information")
-                sid = self.cookie('sid')
-                locationToLoad = fs.abspath(self.sessionPath + '/' + sid, True)
-                if sid and fs.exists(locationToLoad):
-                    try:
-                        self.session = fs.read(locationToLoad, READ_PICKLE)
-                        if self.session:
-                            core.log.report("[fw.ex.session] Session '%s' restored" % sid)
-                        else:
-                            localRenewSession = True
-                            core.log.report("[fw.ex.session] Session '%s' failed to be restored" % sid, core.log.warningLevel)
-                    except:
-                        localRenewSession = True
-                        core.log.report("[fw.ex.session] Session '%s' failed to be restored as fs threw exception." % sid, core.log.errorLevel)
-                else:
-                    sid = hashlib.new(str(time.time())).hexdigest()
-                    self.session.id = sid
-                self.cookie('sid', sid)
-            # Then, load or change the data.
-            if not self.session.data.has_key(key) and not newValue:
-                core.log.report("[fw.ec.session] No session variable '%s' found" % key, core.log.warningLevel)
-            if not newValue == None:
-                session.data[key] = newValue
-                core.log.report("[fw.ec.session] Session variable '%s' updated" % key)
-            # Save only if there is update
-            if not newValue == None:
-                if self.sessionSave():
-                    core.log.report("[fw.ec.session] Session variable '%s' stored" % key)
-                    return self.session.data[key]
-                else:
-                    core.log.report("[fw.ec.session] Session variable '%s' not stored" % key, core.log.warningLevel)
-                    return None
-            if self.session.data.has_key(key):
-                core.log.report("[fw.ec.session] Session variable '%s' accessed" % key)
-                return self.session.data[key]
-            core.log.report("[fw.ec.session] Session variable '%s' not found" % key)
+    def receive(self, connectionName):
+        pass
+
+class YotsubaPackageEnvironmentController:
+    """
+    Environment Controller
+
+    This is a legacy class. It is no longer recommended to use in the
+    development. This class is still present as a prototype for any
+    developer who is interested how to handle session data, cookies and
+    the header of a HTML document from scatch.
+
+    This function is refactored from Yotsuba SDK 1 without testing. Any uses
+    of this function without testing if it works properly is not recommended.
+    """
+
+    headers = {
+        'Content-Type': DEFAULT_CONTENT_TYPE
+    }
+    cookies = Cookie.SimpleCookie()
+    session = None
+    sessionPath = ''
+
+    def env(self, keyIndex):
+        if os.environ.has_key(keyIndex):
+            return os.environ[keyIndex]
+        else:
             return None
 
-        def sessionSave(self):
-            # Look for session ID
-            if not self.session:
-                core.log.report("[fw.ec.sessionSave] The session identifier is invalid.", core.log.errorLevel)
-                return False
-            # Look for the configuration for the session storage
-            if not self.sessionPath == '':
-                self.sessionPath = DEFAULT_PATH_TO_SESSION_STORAGE
-            # Look for the session storage
-            # CASE: Cannot find the session storage.
-            if not fs.exists(self.sessionsPath):
-                core.log.report("[fw.ec.sessionSave] The session storage does not exist.", core.log.warningLevel)
-                if fs.mkdir(self.sessionPath):
-                    core.log.report("[fw.ec.sessionSave] The session storage is initialized.")
-                    if fs.writable(self.sessionPath):
-                        core.log.report("[fw.ec.sessionSave] The session storage is confirmed to be accessible.")
-                else:
-                    core.log.report("[fw.ec.sessionSave] The creation of the session storage is not permitted.", core.log.errorLevel)
-            # CASE: The session storage is found.
-            else:
-                core.log.report("[fw.ec.sessionSave] Found the session storage")
-            # Prepare the path of the session storage for this session
-            locationToSave = fs.abspath(self.sessionPath + '/' + self.session.id, True)
-            # Locate the existed information of this session
-            if not fs.exists(locationToSave):
-                core.log.report("[fw.ec.sessionSave] Session ID '%s' does not exists but it will be automatically generated." % self.session.id, core.log.warningLevel)
-            # Test writing
-            if not fs.writable(locationToSave):
-                core.log.report("[fw.ec.sessionSave] Session ID '%s' is not saved as backing up this session is not permitted." % self.session.id, core.log.warningLevel)
-                return False
-            # Backup
-            if not fs.write(locationToSave, self.session.data, WRITE_PICKLE):
-                core.log.report("[fw.ec.sessionSave] Session '%s' is not saved as the result of failed backup." % self.session.id, core.log.errorLevel)
-                return False
-            return True
+    def header(self, key = None, value = None, selfPrint = False):
+        if key:
+            try:
+                if value and type(x) == str:
+                    self.headers[key] = value
+                return self.headers[key]
+            except:
+                syslog.report(
+                    "[fw.ec.header] failed to retrieve a value of header %s"\
+                    % key,
+                    syslog.warningLevel
+                )
+        else:
+            lines = []
+            for k, v in headers.iteritems():
+                lines.append('%s: %s' % (k, v))
+            result = '%s\n%s\n\n' % ('\n'.join(lines), self.printCookie())
+            if selfPrint:
+                print result
+            return result
+    # Cookies
+    def cookie(self, key, newValue = ''):
+        if newValue == '':
+            cookies[key] = newValue
+        return cookies[key].value
 
-        class sessionObject:
-            id = None
-            data = {}
-            
-            def __init__(self, id):
-                self.id = id
-                
-    class ui:
-        """
-        User Interface Package
-        """
-        encoding = 'utf-8'
-        tagPrefix = ''
-        tags = {}
-        
-        def __init__(self, tagPrefix = ''):
-            self.tagPrefix = tagPrefix
-        
-        def loadTagLibrary(self, XMLFilename, forceReload = False):
-            sdk.xml.read('UITags', XMLFilename, forceReload)
-            self.tags = sdk.xml.query('tagLibrary tag', 'UITags')
-        
-        def tag(self, key, newValue = None):
-            if not self.tags.has_key(key) and not newValue == None:
-                return ''
-            if not newValue == None:
-                self.tags[key] = '%s' % newValue
-            return self.tags[key]
-        
-        def translate(self, template):
-            if not type(template) == str:
-                return ''
-            if fs.exists(template):
-                template = fs.read(template)
-            for tagKey, tagValue in tags:
-                re.sub("<%s%s/>" % (self.tagPrefix, tagKey), self.tagValue, template)
-            return template
-    
-    class url:
-        """
-        URL Creation Package
-        """
-        minimumLengthOfQueryString = 3
-        
-        def buildQueryString(self, queryHash = None):
-            if not queryHash:
-                return ''
-            if len(queryHash.keys()) <= 0:
-                return ''
-            resultString = []
-            for queryKey, queryValue in queryHash:
-                if queryKey == '' or queryValue == '':
-                    core.log.report('Empty query key or value is used in fw.url.buildQieryString', core.log.warningLevel)
-                    continue
-                resultString.append('%s=%s' % (queryKey, queryValue))
-            return '&'.join(resultString)
-        
-        def buildURL(self, destination, queryHash = None, port = None):
-            queryString = self.buildQueryString(queryHash)
-            resultURL = destination
-            if not re.match(".+\://.+", destination):
-                resultURL += 'http://' + destination
-            if port and type(port) == int:
-                if re.match("\?", resultURL):
-                    resultURLCom = re.split('\?', resultURL, 1)
-                    resultURL += '%s:%d?%s' % (resultURLCom[0], port, resultURLCom[1])
-                else:
-                    resultURL += ':%d' % port
-            if queryString and len(queryString) >= self.minimumLengthOfQueryString:
-                resultURL += '?%s' % queryString
-            return resultURL
+    def printCookie(self):
+        return cookies.output()
+
+    # Sessions
+    def session(self, key, newValue = None):
+        # Initialization
+        localRenewSession = False
+        # If the session data is not initialized, then the initialization will
+        # be preceeded first by default.
+        if not self.session:
+            self.session = self.SessionObject()
+            syslog.report("[fw.ec.session] Initialized the session information")
+            sid = self.cookie('sid')
+            locationToLoad = fs.abspath(self.sessionPath + '/' + sid, True)
+            if sid and fs.exists(locationToLoad):
+                try:
+                    self.session = fs.read(locationToLoad, READ_PICKLE)
+                    if self.session:
+                        syslog.report("[fw.ex.session] Session '%s' restored" % sid)
+                    else:
+                        localRenewSession = True
+                        syslog.report("[fw.ex.session] Session '%s' failed to be restored" % sid, syslog.warningLevel)
+                except:
+                    localRenewSession = True
+                    syslog.report("[fw.ex.session] Session '%s' failed to be restored as fs threw exception." % sid, syslog.errorLevel)
+            else:
+                sid = hashlib.new(str(time.time())).hexdigest()
+                self.session.id = sid
+            self.cookie('sid', sid)
+        # Then, load or change the data.
+        if not self.session.data.has_key(key) and not newValue:
+            syslog.report("[fw.ec.session] No session variable '%s' found" % key, syslog.warningLevel)
+        if not newValue == None:
+            session.data[key] = newValue
+            syslog.report("[fw.ec.session] Session variable '%s' updated" % key)
+        # Save only if there is update
+        if not newValue == None:
+            if self.sessionSave():
+                syslog.report("[fw.ec.session] Session variable '%s' stored" % key)
+                return self.session.data[key]
+            else:
+                syslog.report("[fw.ec.session] Session variable '%s' not stored" % key, syslog.warningLevel)
+                return None
+        if self.session.data.has_key(key):
+            syslog.report("[fw.ec.session] Session variable '%s' accessed" % key)
+            return self.session.data[key]
+        syslog.report("[fw.ec.session] Session variable '%s' not found" % key)
+        return None
+
+    def sessionSave(self):
+        # Look for session ID
+        if not self.session:
+            syslog.report("[fw.ec.sessionSave] The session identifier is invalid.", syslog.errorLevel)
+            return False
+        # Look for the configuration for the session storage
+        if not self.sessionPath == '':
+            self.sessionPath = DEFAULT_PATH_TO_SESSION_STORAGE
+        # Look for the session storage
+        # CASE: Cannot find the session storage.
+        if not fs.exists(self.sessionsPath):
+            syslog.report("[fw.ec.sessionSave] The session storage does not exist.", syslog.warningLevel)
+            if fs.mkdir(self.sessionPath):
+                syslog.report("[fw.ec.sessionSave] The session storage is initialized.")
+                if fs.writable(self.sessionPath):
+                    syslog.report("[fw.ec.sessionSave] The session storage is confirmed to be accessible.")
+            else:
+                syslog.report("[fw.ec.sessionSave] The creation of the session storage is not permitted.", syslog.errorLevel)
+        # CASE: The session storage is found.
+        else:
+            syslog.report("[fw.ec.sessionSave] Found the session storage")
+        # Prepare the path of the session storage for this session
+        locationToSave = fs.abspath(self.sessionPath + '/' + self.session.id, True)
+        # Locate the existed information of this session
+        if not fs.exists(locationToSave):
+            syslog.report("[fw.ec.sessionSave] Session ID '%s' does not exists but it will be automatically generated." % self.session.id, syslog.warningLevel)
+        # Test writing
+        if not fs.writable(locationToSave):
+            syslog.report("[fw.ec.sessionSave] Session ID '%s' is not saved as backing up this session is not permitted." % self.session.id, syslog.warningLevel)
+            return False
+        # Backup
+        if not fs.write(locationToSave, self.session.data, WRITE_PICKLE):
+            syslog.report("[fw.ec.sessionSave] Session '%s' is not saved as the result of failed backup." % self.session.id, syslog.errorLevel)
+            return False
+        return True
+
+    class SessionObject:
+        id = None
+        data = {}
+
+        def __init__(self, id):
+            self.id = id
+
+class YotsubaPackageURICreator:
+    """
+    URL Creation Package
+    """
+    minimumLengthOfQueryString = 3
+
+    def buildQueryString(self, queryHash = None):
+        if not queryHash:
+            return ''
+        if len(queryHash.keys()) <= 0:
+            return ''
+        resultString = []
+        for queryKey, queryValue in queryHash:
+            if queryKey == '' or queryValue == '':
+                syslog.report('Empty query key or value is used in fw.url.buildQieryString', syslog.warningLevel)
+                continue
+            resultString.append('%s=%s' % (queryKey, queryValue))
+        return '&'.join(resultString)
+
+    def buildURL(self, destination, queryHash = None, port = None):
+        queryString = self.buildQueryString(queryHash)
+        resultURL = destination
+        if not re.match(".+\://.+", destination):
+            resultURL += 'http://' + destination
+        if port and type(port) == int:
+            if re.match("\?", resultURL):
+                resultURLCom = re.split('\?', resultURL, 1)
+                resultURL += '%s:%d?%s' % (resultURLCom[0], port, resultURLCom[1])
+            else:
+                resultURL += ':%d' % port
+        if queryString and len(queryString) >= self.minimumLengthOfQueryString:
+            resultURL += '?%s' % queryString
+        return resultURL
 
 class YotsubaCore:
-    log = YotsubaCorePackage.log()
+    log = YotsubaPackageSystemLog()
     
     testBiggerLock = thread.allocate_lock()
     testLock = thread.allocate_lock()
@@ -657,15 +451,6 @@ class YotsubaCore:
         for j in range(200):
             self.x = i * j
         self.exit.append(i)
-
-class YotsubaSDK:
-    crypt = YotsubaSDKPackage.crypt()
-    log = YotsubaSDKPackage.log()
-    mail = YotsubaSDKPackage.mail()
-    time = YotsubaSDKPackage.time()
-
-class YotsubaFW:
-    ec = YotsubaFWPackage.ec()
 
 class YotsubaPackageFileSystemInterface:
     # Make directory
@@ -852,17 +637,17 @@ class YotsubaPackageXML:
         """
         tree = None
         treeOrg = None
-        core.log.report('sdk.xml.read')
+        syslog.report('sdk.xml.read')
         try:
             if fs.exists(source):
                 treeOrg = xml.dom.minidom.parse(source)
             else:
                 treeOrg = xml.dom.minidom.parseString(source)
         except:
-            core.log.report(
+            syslog.report(
                 '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
                 sys.exc_info()[0],
-                core.log.errorLevel
+                syslog.errorLevel
             )
             return False
         try:
@@ -873,9 +658,9 @@ class YotsubaPackageXML:
                 break
             self.trees[treeName] = tree
         except:
-            core.log.report(
+            syslog.report(
                 '[sdk.xml.read] Tree creation raised errors.\n\t%s' % sys.exc_info()[0],
-                core.log.errorLevel
+                syslog.errorLevel
             )
             return False
         del treeOrg
@@ -887,9 +672,9 @@ class YotsubaPackageXML:
         """
         # If `treeName` and `selector` are not of type string, returns an empty list.
         if not type(selector) == str or  not type(treeName) == str:
-            core.log.report(
+            syslog.report(
                 '[sdk.xml.query] unexpected types of treeName and selector',
-                core.log.warningLevel
+                syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
             return self.queriedNodes([])
@@ -897,16 +682,16 @@ class YotsubaPackageXML:
             pass
         # If there is no reference to the tree named by `treeName`, return an empty list.
         if type(treeName) == str and not self.trees.has_key(treeName):
-            core.log.report(
+            syslog.report(
                 '[sdk.xml.query] the required tree "%s" does not exist.' % treeName,
-                core.log.warningLevel
+                syslog.warningLevel
             )
             # return nothing if there is not a tree called by treeName
             return self.queriedNodes([])
         else:
             pass
         # Creates a selector reference
-        selectorReference = sdk.crypt.hash(selector, ['sha'])
+        selectorReference = crypt.hash(selector, ['sha'])
         # Initializes the list of queried nodes
         resultList = []
         self.sharedMemory[selectorReference] = []
@@ -970,9 +755,9 @@ class YotsubaPackageXML:
                 if useMultiThread:
                     self.exitedThreads[selectorReference].append(query)
             except:
-                core.log.report(
+                syslog.report(
                     "Shared Memory [%s] not available" % selectorReference,
-                    core.log.errorLevel
+                    syslog.errorLevel
                 )
             if not selectorReference in self.runningThreads and useMultiThread:
                 thread.exit()
@@ -980,14 +765,14 @@ class YotsubaPackageXML:
                 try:
                     self.locks[selectorReference].release()
                 except:
-                    core.log.report(
+                    syslog.report(
                         "Lock [%s] already released" % selectorReference,
-                        core.log.errorLevel
+                        syslog.errorLevel
                     )
         else:
-            core.log.report(
+            syslog.report(
                 "No operation [%s]" % selectorReference,
-                core.log.errorLevel
+                syslog.errorLevel
             )
     
     def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
@@ -1012,9 +797,9 @@ class YotsubaPackageXML:
                 try:
                     rule = selector[selectorLevel - 1]
                 except:
-                    core.log.report(
+                    syslog.report(
                         '%d:%s\n\t|_ Failed to determine the special rule' % (node.level, node.name()),
-                        core.log.warningLevel
+                        syslog.warningLevel
                     )
             # If two or more rules are specified consecutively, regards this selector as ill-formatted
             if selector[selectorLevel] in self.specialRules:
@@ -1091,9 +876,9 @@ class YotsubaPackageXML:
                 #        resultList.extend(self.traverse(cnode, selector, selectorLevel))
                 #    return resultList
                 else:
-                    core.log.report(
+                    syslog.report(
                         '%d:%s (Limit break, Force-stop)' % (node.level, node.name()),
-                        core.log.codeWatchLevel
+                        syslog.codeWatchLevel
                     )
                     return []
             # Handle a heirarchy combinator
@@ -1140,9 +925,9 @@ class YotsubaPackageXML:
             else:
                 return []
         except:
-            core.log.report(
+            syslog.report(
                 '[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0]),
-                core.log.errorLevel
+                syslog.errorLevel
             )
             raise '[sdk.xml.traverse] Unknown errors at %d:%s\n\t%s' % (node.level, node.name(), sys.exc_info()[0])
             return []
@@ -1252,7 +1037,7 @@ class YotsubaPackageXML:
             # Class-node instance of the parameter `node`
             treeNode = self.node(node, parentNode, level, levelIndex)
             if len(node.childNodes) > 0:
-                core.log.report('%d:%s > Constructing children' % (level, treeNode.name()), core.log.codeWatchLevel)
+                syslog.report('%d:%s > Constructing children' % (level, treeNode.name()), syslog.codeWatchLevel)
                 cnodeIndex = -1
                 for cnode in node.childNodes:
                     try:
@@ -1260,20 +1045,20 @@ class YotsubaPackageXML:
                         childNode = self.buildTreeOnTheFly(cnode, treeNode, level + 1, cnodeIndex)
                         if childNode == None:
                             continue
-                        core.log.report('%d:%s/%s' % (level, treeNode.name(), childNode.name()), core.log.codeWatchLevel)
+                        syslog.report('%d:%s/%s' % (level, treeNode.name(), childNode.name()), syslog.codeWatchLevel)
                         treeNode.children.append(childNode)
                     except:
-                        core.log.report(
+                        syslog.report(
                             '[sdk.xml.buildTreeOnTheFly] Childen creation failed\n\t%s' % sys.exc_info()[0],
-                            core.log.errorLevel
+                            syslog.errorLevel
                         )
                         return None
-                core.log.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), core.log.codeWatchLevel)
+                syslog.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), syslog.codeWatchLevel)
             return treeNode
         except:
-            core.log.report(
+            syslog.report(
                 '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
-                core.log.errorLevel
+                syslog.errorLevel
             )
             return None
     
@@ -1506,7 +1291,7 @@ class MailReceiver(MailerObject):
                 self.receiver.user(self.username())
                 self.receiver.pass_(self.password())
         except Exception, e:
-            core.log.report(e, core.log.errorLevel)
+            syslog.report(e, syslog.errorLevel)
     
     def disconnect(self):
         try:
@@ -1721,17 +1506,17 @@ class MailMessage:
         except:
             return False
 
-# [Legacy module structure for Yotsuba 2.0a2]
-core = YotsubaCore()
-sdk = YotsubaSDK()
-fw = YotsubaFW()
 
-# [New Code for Yotsuba 2.0a3]
+# [Enabled packages]
 # File System Interface
-fs = YotsubaPackageFileSystemInterface()
+fs      = YotsubaPackageFileSystemInterface()
+# System Log
+syslog  = YotsubaPackageSystemLog()
+# Kotoba, An XML Query Representative
+kotoba  = YotsubaPackageXML()
+# Cryptographer
+crypt   = YotsubaPackageCryptographer()
 
-# Kotoba: An XML Query Representative
-kotoba = YotsubaPackageXML()
 
 if __name__ == '__main__':
     #core.multiThreadTest();
