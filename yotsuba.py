@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # Yotsuba SDK and Framework
-# Version 2.0 (Developmental)
+# Version 2.0 (Developmental)????????
 # (C) 2007 Juti Noppornpitak <juti_n@yahoo.co.jp>
 # License: LGPL
 
@@ -16,7 +16,6 @@ import cPickle
 import pickle
 import Cookie
 import mimetypes
-import MimeWriter
 import email
 import poplib
 import imaplib
@@ -49,7 +48,7 @@ WRITE_NORMAL    = 'w'
 WRITE_BINARY    = 'wb'
 WRITE_PICKLE    = 'pickle::write'
 
-class YotsubaPackageSystemLog:
+class PackageSystemLog:
     # Local configuration
     maxAllowedLevel = 2
     # Flags
@@ -104,7 +103,7 @@ class YotsubaPackageSystemLog:
             self.level = level
 
 
-class YotsubaPackageTimeMaster:
+class PackageTimeMaster:
     """
     This package is the simple version of the time object in Python.
     """
@@ -128,7 +127,7 @@ class YotsubaPackageTimeMaster:
 
 
 
-class YotsubaPackageCryptographer:
+class PackageCryptographer:
     cryptographicDepthLevel = 10
 
     def serialise(self, dataObject):
@@ -160,7 +159,7 @@ class YotsubaPackageCryptographer:
             rstring = base64.b64decode(rstring)
         return rstring
 
-class YotsubaPackageBlog:
+class PackageBlog:
     """
     yotsuba.sdk.log
 
@@ -187,7 +186,12 @@ class YotsubaPackageBlog:
                     content = re.sub(temp, temp_link, content)
         return content
 
-class YotsubaPackageMail:
+class PackageMail:
+    """
+    Friendly mailing tools
+    
+    (Currently, the object is not yet tested and not approved for the stable release.)
+    """
     defaultMessageSubject = 'Untitled Message'
     re_validEmailAddress = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
     connectionNodes = {}
@@ -243,7 +247,7 @@ class YotsubaPackageMail:
     def receive(self, connectionName):
         pass
 
-class YotsubaPackageEnvironmentController:
+class PackageEnvironmentController:
     """
     Environment Controller
 
@@ -387,7 +391,7 @@ class YotsubaPackageEnvironmentController:
         def __init__(self, id):
             self.id = id
 
-class YotsubaPackageURICreator:
+class PackageURICreator:
     """
     URL Creation Package
     """
@@ -421,38 +425,7 @@ class YotsubaPackageURICreator:
             resultURL += '?%s' % queryString
         return resultURL
 
-class YotsubaCore:
-    log = YotsubaPackageSystemLog()
-    
-    testBiggerLock = thread.allocate_lock()
-    testLock = thread.allocate_lock()
-    enter = []
-    exit = []
-    x = 0
-    
-    def multiThreadTest(self):
-        self.testBiggerLock.acquire()
-        print "Checkpoint 1"
-        for i in range(200):
-            thread.start_new(self.counter, (i,))
-        print "Checkpoint 2"
-        self.testBiggerLock.release()
-        self.testBiggerLock.acquire()
-        print "Checkpoint 3"
-        print self.x
-        print self.enter
-        print self.exit
-        print "Checkpoint 4"
-        self.testBiggerLock.release()
-        
-    def counter(self, i):
-        print "Run ", i
-        self.enter.append(i)
-        for j in range(200):
-            self.x = i * j
-        self.exit.append(i)
-
-class YotsubaPackageFileSystemInterface:
+class PackageFileSystemInterface:
     # Make directory
     def mkdir(self, destpath):
         try:
@@ -605,7 +578,14 @@ class YotsubaPackageFileSystemInterface:
             return True
         return False
 
-class YotsubaPackageXML:
+class PackageXML(object):
+    """
+    XML parser using CSS3 selector.
+    
+    Normally, this package is already instantiated upon importing this library.
+    However, when the user instantiates an instance of this class, the internal
+    term here is "Standalone Mode"
+    """
     rule_descendantCombinator = ' '
     rule_childCombinator = '>'
     rule_adjacentSiblingCombinator = '+'
@@ -615,6 +595,7 @@ class YotsubaPackageXML:
         rule_adjacentSiblingCombinator,
         rule_generalSiblingCombinator
     ]
+    defaultTreeName = 'defaultTree' # for the standalone mode
     trees = {}
     locks = {}
     runningThreads = {}
@@ -629,12 +610,19 @@ class YotsubaPackageXML:
         This is a prototype.
         """
         self.locks['referencing'] = thread.allocate_lock()
+        #self.__type__ = "yotsuba"
     
-    def read(self, treeName, source):
+    def read(self, *params):
         """
         Read and parse either a XML-formatted string or a XML document file and
         store for querying.
         """
+        if len(params) == 0:
+            raise Exception("Expect at least one parameter, which indicates the source of the document or the XML-formatted string.");
+        treeName = self.defaultTreeName
+        source = params[-1]
+        if len(params) > 1:
+            treeName = params[0]
         tree = None
         treeOrg = None
         syslog.report('sdk.xml.read')
@@ -666,20 +654,43 @@ class YotsubaPackageXML:
         del treeOrg
         return True
     
+    def get(self, selector, useMultiThread = False):
+        """
+        Get elements according to the supplied combination of CSS-3 selectors.
+        This method is suitable for the standalone/default mode.
+        """
+        syslog.report("(Interface) Looking for [%s]" % selector)
+        return self.query(self.defaultTreeName, selector, useMultiThread)
+    
     def query(self, treeName, selector, useMultiThread = False):
         """
-        Query for elements according to the supplied combination of CSS-3 selectors.
+        Query for elements according to the supplied combination of CSS-3
+        selectors. This method is suitable if there are multiple trees within
+        one instance of PackageXML.
+        
+        (Note: The goal is to support a value of treeName as an instance of self.node
+        and self.queryNodes. The support on self.node is not quite working.)
         """
         # If `treeName` and `selector` are not of type string, returns an empty list.
-        if not type(selector) == str or  not type(treeName) == str:
+        if not type(selector) == str:
             syslog.report(
-                '[sdk.xml.query] unexpected types of treeName and selector',
+                '[sdk.xml.query] unexpected types of the selector',
                 syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
             return self.queriedNodes([])
-        else:
-            pass
+        
+        syslog.report("Looking for [%s]" % selector)
+        
+        if not type(treeName) == str and not type(treeName) == self.node and not type(treeName) == self.queriedNodes:
+            syslog.report(
+                '[sdk.xml.query] unexpected types of treeName',
+                syslog.warningLevel
+            )
+            # return nothing if either no treeName or no selector is not a string
+            print "Type of Tree Name:", type(treeName), "::" , str(treeName)
+            return self.queriedNodes([])
+        
         # If there is no reference to the tree named by `treeName`, return an empty list.
         if type(treeName) == str and not self.trees.has_key(treeName):
             syslog.report(
@@ -688,19 +699,24 @@ class YotsubaPackageXML:
             )
             # return nothing if there is not a tree called by treeName
             return self.queriedNodes([])
-        else:
-            pass
+        
         # Creates a selector reference
         selectorReference = crypt.hash(selector, ['sha'])
         # Initializes the list of queried nodes
         resultList = []
         self.sharedMemory[selectorReference] = []
+        
         # Gets the reference to the root node
-        startupNode = None
-        try:
-            startupNode = self.trees[treeName]
-        except:
-            startupNode = treeName
+        startupNodes = []
+        if type(treeName) == str:
+            startupNodes.append(self.trees[treeName])
+        elif type(treeName) == self.node:
+            startupNodes.append(treeName)
+        elif type(treeName) == self.queriedNodes:
+            startupNodes.extend(treeName.list())
+        else:
+            raise Exception("Failed to determine the list of startup nodes for querying\ntreeName is of type %s" % str(type(treeName)))
+        
         # Queries cleanup (Clear out the tab character)
         selector = re.sub("\t", " ", selector)
         # Engroups
@@ -713,14 +729,16 @@ class YotsubaPackageXML:
             self.exitedThreads[selectorReference] = []
         
         for query in queries:
-            # Multi-threading feature
-            if useMultiThread:
-                if query in self.runningThreads[selectorReference]:
-                    continue
-                self.runningThreads[selectorReference].append(query)
-                thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
-            else:
-                self.queryWithOneSelector(selectorReference, startupNode, query, False)
+            for startupNode in startupNodes:
+                syslog.report("Query for [%s]" % query)
+                # Multi-threading feature
+                if useMultiThread:
+                    if query in self.runningThreads[selectorReference]:
+                        continue
+                    self.runningThreads[selectorReference].append(query)
+                    thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
+                else:
+                    self.queryWithOneSelector(selectorReference, startupNode, query, False)
         
         self.locks[selectorReference].acquire()
         resultList = self.sharedMemory[selectorReference]
@@ -746,12 +764,15 @@ class YotsubaPackageXML:
         not meant to be used directly. Please use query(...) instead.
         """
         # Gets the path
+        syslog.report("Started querying with one selector [%s]" % query)
         combination = re.split("\ +", query.strip())
         if len(combination) > 0:
             try:
+                syslog.report("Extending the shared memory")
                 self.sharedMemory[selectorReference].extend(
                     self.traverse(startupNode, combination)
                 )
+                syslog.report("Extended the shared memory")
                 if useMultiThread:
                     self.exitedThreads[selectorReference].append(query)
             except:
@@ -774,6 +795,7 @@ class YotsubaPackageXML:
                 "No operation [%s]" % selectorReference,
                 syslog.errorLevel
             )
+        syslog.report("Stopped querying with one selector")
     
     def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
         """
@@ -788,9 +810,14 @@ class YotsubaPackageXML:
         for the description of parameters
         """
         try:
+            syslog.report("Traverse [%d/%s:%d:%s]" % (node.level, node.name(), selectorLevel, ' '.join(selector)))
             rule = self.rule_descendantCombinator
             # If there is no selector, return an empty list
             if selectorLevel >= len(selector):
+                syslog.report(
+                    '%d:%s\n\t|_ Could not find one (SLV:%d != SLN:"%s")' % (node.level, node.name(), selectorLevel, ' '.join(selector)),
+                    syslog.warningLevel
+                )
                 return []
             if selector[selectorLevel] in self.specialRules:
                 selectorLevel += 1
@@ -803,21 +830,21 @@ class YotsubaPackageXML:
                     )
             # If two or more rules are specified consecutively, regards this selector as ill-formatted
             if selector[selectorLevel] in self.specialRules:
+                syslog.report("Consecutive hierarchical directive found", syslog.warningLevel)
                 return []
             # Makes the selector object
             s = self.makeSelectorObject(selector[selectorLevel])
             # First, check if the current element is on the path regardless to the attributes and some filtering options
-            isTheNodeOnThePath = \
-                ( \
-                    s.name() == '*' \
-                ) or ( \
-                    s.name() == '' \
-                    and ( \
-                        len(s.attr().keys()) > 0 \
-                        or len(s.filter()) > 0 \
-                    ) \
-                ) or ( \
-                    s.name() == node.name() \
+            isTheNodeOnThePath = (
+                    s.name() == '*'
+                ) or (
+                    s.name() == ''
+                    and (
+                        len(s.attr().keys()) > 0
+                        or len(s.filter()) > 0
+                    )
+                ) or (
+                    s.name() == node.name()
                 )
             # Second, uses attributes to filter out the element that is not qualified.
             # (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
@@ -883,6 +910,7 @@ class YotsubaPackageXML:
                     return []
             # Handle a heirarchy combinator
             elif rule == self.rule_descendantCombinator:
+                isTheEndOfPathReached = self.isTheEndOfPathReached(selector, selectorLevel)
                 # If the node is on the path and it is the end of the path
                 if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
                     # If the last element required on the path is a wild card,
@@ -891,6 +919,9 @@ class YotsubaPackageXML:
                         selectorLevel -= 1
                     else: pass
                     resultList.append(node)
+                else:
+                    syslog.report( "ON_PATH_FINALE %s" % str(isTheNodeOnThePath) )
+                    syslog.report( "BOTTOM_OF_TREE %s" % str(isTheEndOfPathReached) )
                 cnodeIndex = -1
                 doSkip = True
                 for cnode in node.children:
@@ -923,6 +954,7 @@ class YotsubaPackageXML:
                 return resultList
             # No rule applied
             else:
+                syslog.report("What is this combination?")
                 return []
         except:
             syslog.report(
@@ -1062,7 +1094,7 @@ class YotsubaPackageXML:
             )
             return None
     
-    class node:
+    class node(object):
         level = 0
         element = None
         children = None
@@ -1115,7 +1147,7 @@ class YotsubaPackageXML:
             except:
                 return []
     
-    class queriedNodes:
+    class queriedNodes(object):
         elements = None
         
         def __init__(self, elements):
@@ -1142,7 +1174,8 @@ class YotsubaPackageXML:
         
         def length(self):
             return len(self.elements)
-    class selectorObject:
+    
+    class selectorObject(object):
         SOName = None
         SOAttrs = None
         SOFilters = None
@@ -1509,14 +1542,13 @@ class MailMessage:
 
 # [Enabled packages]
 # File System Interface
-fs      = YotsubaPackageFileSystemInterface()
+fs      = PackageFileSystemInterface()
 # System Log
-syslog  = YotsubaPackageSystemLog()
+syslog  = PackageSystemLog()
 # Kotoba, An XML Query Representative
-kotoba  = YotsubaPackageXML()
+kotoba  = PackageXML()
 # Cryptographer
-crypt   = YotsubaPackageCryptographer()
-
+crypt   = PackageCryptographer()
 
 if __name__ == '__main__':
     #core.multiThreadTest();

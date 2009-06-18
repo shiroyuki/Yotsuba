@@ -16,6 +16,7 @@ global numOfCases
 global numOfFailedCases
 
 showOutput = True
+showOnlyErrors = True
 output = []
 forceShowLog = False
 forceHideLog = False
@@ -39,10 +40,11 @@ def tPrintMessage():
 def tEqual(label, testingValue, expectedValue):
     global numOfCases
     global numOfFailedCases
+    global showOnlyErrors
     numOfCases += 1
-    if testingValue == expectedValue:
+    if testingValue == expectedValue and not showOnlyErrors:
         tPrint("O\tEquality: %s" % label)
-    else:
+    elif not testingValue == expectedValue and showOnlyErrors:
         tPrint("X\tEquality: %s\n\t\tTesting Value:\t%s\n\t\tExpected Value:\t%s" % (label,testingValue, expectedValue))
         numOfFailedCases += 1
 
@@ -98,6 +100,7 @@ def testingProcedure():
         tEqual("XML Query Test / Existance (%s)" % fq, yotsuba.kotoba.query('test', fq).length(), 0)
     # sdk.xml > Correctness tests
     passedQueries = {
+        'c': 1,
         'common': 4,
         'common[id]': 0,
         'common[name]': 2,
@@ -117,6 +120,7 @@ def testingProcedure():
         'l1 l2b > l3c > l4c': 1,
         'root > c > c2': 1,
         'root > c c2': 1,
+        'root > * > * > common': 2,
         'root common': 4,
         'root * common': 4,
         'root *': 33,
@@ -154,6 +158,21 @@ def testingProcedure():
         tEqual("The selector object construction (ID/Operator)", yotsuba.kotoba.makeSelectorObject(pqK).attr('id')[0], pqV[1])
         tEqual("The selector object construction (ID/Value)", yotsuba.kotoba.makeSelectorObject(pqK).attr('id')[1], pqV[2])
         tEqual("The selector object construction (Filters)", ''.join(yotsuba.kotoba.makeSelectorObject(pqK).filter()), pqV[3])
+
+def testForStandaloneMode():
+
+    # Test in the standalone mode
+    yotsuba.syslog.report("Test the standalone mode")
+    x = yotsuba.PackageXML()
+    tEqual("Read XML in the standalone mode (as an instance)", x.read("test.xml"), True)
+    c = x.get("c")
+    tEqual("Test querying in the standalone mode (as an instance)", c.length(), 1)
+    yotsuba.syslog.report("Test querying in the standalone mode (as an extension)")
+    tEqual("Test querying in the standalone mode (as an extension)", x.query(c, "common").length(), 1)
+    yotsuba.syslog.report("Test the standalone mode (default)")
+    tEqual("Read XML in the standalone mode (default)", yotsuba.kotoba.read("test.xml"), True)
+    tEqual("Test querying in the standalone mode (default)", yotsuba.kotoba.get("c common").length(), 1)
+    
     tPrint("------------------------------------------------------------------------")
 
 def runTests():
@@ -161,33 +180,37 @@ def runTests():
     for round in range(numOfStressTests):
         t_start = time.time()
         testingProcedure()
+        testForStandaloneMode()
         t_localStat.append(time.time() - t_start)
     return t_localStat
 
 def getAverage(list):
+    global numOfCases
     total = 0
     for item in list:
         total += item
-    return total / len(list)
+    return total / len(list) / numOfCases * 100
 
 def getMin(list):
+    global numOfCases
     if len(list) == 0:
         return 0
     minNumber = list[0]
     for item in list:
         if minNumber > item:
             minNumber = item
-    return minNumber
+    return minNumber / numOfCases * 100
 
 def getMax(list):
+    global numOfCases
     maxNumber = 0
     for item in list:
         if maxNumber < item:
             maxNumber = item
-    return maxNumber
+    return maxNumber / numOfCases * 100
 
 if __name__ == '__main__':
-    yotsuba.core.log.report("Begin testing")
+    yotsuba.syslog.report("Begin testing")
     print "========================================================================"
     print "Yotsuba Project 2 > Test Suite (%d loops)" % numOfStressTests
     print "------------------------------------------------------------------------"
@@ -205,31 +228,33 @@ if __name__ == '__main__':
     yotsuba.fs.write('test.stat', t_stat, yotsuba.WRITE_PICKLE)
     
     print "Running Time"
-    print "    Current\t\t%.5f\tsecond(s)" % getAverage(t_currentStat)
-    print "    Average\t\t%.5f\tsecond(s)" % getAverage(t_stat)
-    print "    Minimum\t\t%.5f\tsecond(s)" % getMin(t_stat)
-    print "    Maximum\t\t%.5f\tsecond(s)" % getMax(t_stat)
-    print "    Improvement\t\t%.2f\t%%" % (( getAverage(t_stat) - getAverage(t_currentStat) ) / getAverage(t_stat) * 100)
-    print "    Potential\t\t%.2f\t%%\t%.2f\t%%" % (
+    print "    Current\t\t%.5f\tms" % getAverage(t_currentStat)
+    print "    Average\t\t%.5f\tms" % getAverage(t_stat)
+    print "    Minimum\t\t%.5f\tms" % getMin(t_stat)
+    print "    Maximum\t\t%.5f\tms" % getMax(t_stat)
+    print "    Improvement\t\t%.3f\t%%" % (( getAverage(t_stat) - getAverage(t_currentStat) ) / getAverage(t_stat) * 100)
+    print "    Potential\t\t%.3f\t%%\t%.3f\t%%" % (
         (( 1 - (getAverage(t_currentStat) - getMin(t_stat) ) / ( getMax(t_stat) - getMin(t_stat) ) ) * 100),
         (( 1 - (getAverage(t_stat) - getMin(t_stat) ) / ( getMax(t_stat) - getMin(t_stat) ) ) * 100),
     )
     print "    Total tests\t\t%d\ttests" % (len(t_stat))
     # End of calls
     
-    print "Test Score\t\t%d/%d\t%.2f\t%%" % (numOfCases - numOfFailedCases, numOfCases, (numOfCases - numOfFailedCases)*100/numOfCases)
+    print "Test Score\t\t%d/%d\t%.3f\t%%" % (numOfCases - numOfFailedCases, numOfCases, (numOfCases - numOfFailedCases)*100/numOfCases)
     if (numOfFailedCases > 0 or forceShowLog) and not forceHideLog:
         print "------------------------------------------------------------------------"
         tPrintMessage()
-    if yotsuba.core.log.hasError and not forceHideLog:
+    if (numOfFailedCases > 0 or yotsuba.syslog.hasError) and not forceHideLog:
         print "------------------------------------------------------------------------"
         try:
                 yotsuba.fs.remove('test.log')
+                print "The past test log removed"
         except:
+                print "No past test log"
                 pass
         if not yotsuba.fs.writable('./'):
                 print 'Not writable'
-        if yotsuba.fs.write('test.log', yotsuba.core.log.export()):
+        if yotsuba.fs.write('test.log', yotsuba.syslog.export()):
                 print 'The report was just written'
         else:
                 print 'The report was not written'
