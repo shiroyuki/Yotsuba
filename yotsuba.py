@@ -41,7 +41,7 @@ WRITE_NORMAL    = 'w'
 WRITE_BINARY    = 'wb'
 WRITE_PICKLE    = 'pickle::write'
 
-class PackageSystemLog:
+class SystemLog:
     # Local configuration
     maxAllowedLevel = 2
     # Flags
@@ -95,7 +95,7 @@ class PackageSystemLog:
             self.content = content
             self.level = level
 
-class PackageCryptographer:
+class Cryptographer:
     cryptographicDepthLevel = 10
 
     def serialise(self, dataObject):
@@ -127,7 +127,7 @@ class PackageCryptographer:
             rstring = base64.b64decode(rstring)
         return rstring
 
-class PackageFileSystemInterface:
+class FileSystemInterface:
     # Make directory
     def mkdir(self, destpath):
         try:
@@ -280,7 +280,7 @@ class PackageFileSystemInterface:
             return True
         return False
 
-class PackageXML(object):
+class XML(object):
     """
     XML parser using CSS3 selector.
     
@@ -375,7 +375,7 @@ class PackageXML(object):
         """
         Query for elements according to the supplied combination of CSS-3
         selectors. This method is suitable if there are multiple trees within
-        one instance of PackageXML.
+        one instance of XML.
         
         (Note: The goal is to support a value of treeName as an instance of self.node
         and self.queryNodes. The support on self.node is not quite working.)
@@ -890,7 +890,7 @@ class YotsubaXMLDOMNode(object):
             return []
     
     def get(self, selector):
-        q = PackageXML()
+        q = XML()
         q.read(self)
         return q.get(selector)
 
@@ -923,7 +923,7 @@ class YotsubaXMLQueriedNodes(object):
         return ''.join(output)
     
     def get(self, selector):
-        q = PackageXML()
+        q = XML()
         ret = []
         for element in self.elements:
             q.read(element)
@@ -1013,13 +1013,13 @@ class PackageMail(object):
 
 # [Enabled packages (not thread-safe)]
 # File System Interface
-fs      = PackageFileSystemInterface()
+fs      = FileSystemInterface()
 # System Log
-syslog  = PackageSystemLog()
+syslog  = SystemLog()
 # Kotoba, An XML Query Representative
-kotoba  = PackageXML()
+kotoba  = XML()
 # Cryptographer
-crypt   = PackageCryptographer()
+crypt   = Cryptographer()
 
 if __name__ == '__main__':
     #core.multiThreadTest();
