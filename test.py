@@ -88,9 +88,11 @@ def testingProcedure():
         raise "Cannot read test.xml"
     if not yotsuba.kotoba.read("test", "test.xml"):
         raise "Cannot parse test.xml"
-    tEqual("XML Tree Construction", len(yotsuba.kotoba.trees['test'].children), 7)
-    tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child().name(), 'a')
-    tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child().parent().name(), 'root')
+    
+    yotsuba.kotoba.query('test', 'common').eq(0).get('*')
+    tEqual("XML Tree Construction", len(yotsuba.kotoba.trees['test'].child()), 7)
+    tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child(0).name(), 'a')
+    tEqual("XML Tree Construction", yotsuba.kotoba.trees['test'].child(0).parent().name(), 'root')
     # sdk.xml > Existance tests
     passedQueries = ['c1', 'c c1', 'root c c1', 'root c1', 'root > c c1', 'root c > c1', 'root > c > c1', 'common', 'c c1, e e11']
     failedQueries = ['c3', 'c c3', 'root > c1', 'root c e1']
@@ -168,15 +170,16 @@ def testForStandaloneMode():
     tEqual("Read XML in the standalone mode (as an instance)", x.read("test.xml"), True)
     c = x.get("c")
     tEqual("Test querying in the standalone mode (as an instance)", c.length(), 1)
-    yotsuba.syslog.report("Test querying in the standalone mode (as an extension using queriedNodes as the reference)")
+    #yotsuba.syslog.report("Test querying in the standalone mode (as an extension using queriedNodes as the reference)")
     tEqual("Test querying in the standalone mode (as an extension)", x.query(c, "common").length(), 1)
-    yotsuba.syslog.report("Test querying in the standalone mode (as an extension using node as the reference)")
+    #yotsuba.syslog.report("Test querying in the standalone mode (as an extension using node as the reference)")
     tEqual("Test querying in the standalone mode (as an extension)", x.query(c.eq(0), "common").length(), 1)
-    yotsuba.syslog.report("Test querying in the standalone mode (as an extension using queriedNodes as the reference with the another instance)")
+    #yotsuba.syslog.report("Test querying in the standalone mode (as an extension using queriedNodes as the reference with the another instance)")
     tEqual("Test querying in the standalone mode (as an extension)", y.query(c, "common").length(), 1)
-    yotsuba.syslog.report("Test querying in the standalone mode (as an extension using node as the reference with the another instance)")
+    #yotsuba.syslog.report("Test querying in the standalone mode (as an extension using node as the reference with the another instance)")
     tEqual("Test querying in the standalone mode (as an extension)", y.query(c.eq(0), "common").length(), 1)
-    yotsuba.syslog.report("Test the standalone mode (default)")
+    tEqual("Test querying in the standalone mode (as an extension)", x.get("c").get("common").length(), 1)
+    #yotsuba.syslog.report("Test the standalone mode (default)")
     tEqual("Read XML in the standalone mode (default)", yotsuba.kotoba.read("test.xml"), True)
     tEqual("Test querying in the standalone mode (default)", yotsuba.kotoba.get("c common").length(), 1)
     

@@ -329,10 +329,15 @@ class PackageXML(object):
         treeOrg = None
         syslog.report('sdk.xml.read')
         try:
-            if fs.exists(source):
-                treeOrg = xml.dom.minidom.parse(source)
+            if type(source) == str:
+                if fs.exists(source):
+                    treeOrg = xml.dom.minidom.parse(source)
+                else:
+                    treeOrg = xml.dom.minidom.parseString(source)
+            elif type(source) == YotsubaXMLDOMNode:
+                tree = source
             else:
-                treeOrg = xml.dom.minidom.parseString(source)
+                raise Exception("yotsuba.xml.read: Invalid input")
         except:
             syslog.report(
                 '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
@@ -340,12 +345,14 @@ class PackageXML(object):
                 syslog.errorLevel
             )
             return False
+        #if True:
         try:
-            for node in treeOrg.childNodes:
-                if not node.nodeType == node.ELEMENT_NODE:
-                    continue
-                tree = self.buildTreeOnTheFly(node)
-                break
+            if tree is None:
+                for node in treeOrg.childNodes:
+                    if not node.nodeType == node.ELEMENT_NODE:
+                        continue
+                    tree = self.buildTreeOnTheFly(node)
+                    break
             self.trees[treeName] = tree
         except:
             syslog.report(
@@ -354,7 +361,7 @@ class PackageXML(object):
             )
             return False
         del treeOrg
-        return True
+        return tree is not None
     
     def get(self, selector, useMultiThread = False):
         """
@@ -380,18 +387,18 @@ class PackageXML(object):
                 syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
-            return self.queriedNodes([])
+            return YotsubaXMLQueriedNodes()
         
         syslog.report("Looking for [%s]" % selector)
         
-        if not type(treeName) == str and not type(treeName) == self.node and not type(treeName) == self.queriedNodes:
+        if not type(treeName) == str and not type(treeName) == YotsubaXMLDOMNode and not type(treeName) == YotsubaXMLQueriedNodes:
             syslog.report(
                 '[sdk.xml.query] unexpected types of treeName',
                 syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
-            print "Type of Tree Name:", type(treeName), "::" , str(treeName)
-            return self.queriedNodes([])
+            # print "Type of Tree Name:", type(treeName), "::" , str(treeName)
+            return YotsubaXMLQueriedNodes()
         
         # If there is no reference to the tree named by `treeName`, return an empty list.
         if type(treeName) == str and not self.trees.has_key(treeName):
@@ -400,7 +407,7 @@ class PackageXML(object):
                 syslog.warningLevel
             )
             # return nothing if there is not a tree called by treeName
-            return self.queriedNodes([])
+            return YotsubaXMLQueriedNodes()
         
         # Creates a selector reference
         selectorReference = crypt.hash(selector, ['sha'])
@@ -412,9 +419,9 @@ class PackageXML(object):
         startupNodes = []
         if type(treeName) == str:
             startupNodes.append(self.trees[treeName])
-        elif type(treeName) == self.node:
+        elif type(treeName) == YotsubaXMLDOMNode:
             startupNodes.append(treeName)
-        elif type(treeName) == self.queriedNodes:
+        elif type(treeName) == YotsubaXMLQueriedNodes:
             startupNodes.extend(treeName.list())
         else:
             raise Exception("Failed to determine the list of startup nodes for querying\ntreeName is of type %s" % str(type(treeName)))
@@ -458,7 +465,7 @@ class PackageXML(object):
                 self.locks['referencing'].release()
             except:
                 print "Removing referencing denied"
-        return self.queriedNodes(resultList)
+        return YotsubaXMLQueriedNodes(resultList)
     
     def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
         """
@@ -767,9 +774,10 @@ class PackageXML(object):
         if not node.nodeType == node.ELEMENT_NODE:
             # Ignore non-element node
             return None
-        try:
+        #try:
+        if True:
             # Class-node instance of the parameter `node`
-            treeNode = self.node(node, parentNode, level, levelIndex)
+            treeNode = YotsubaXMLDOMNode(node, parentNode, level, levelIndex)
             if len(node.childNodes) > 0:
                 syslog.report('%d:%s > Constructing children' % (level, treeNode.name()), syslog.codeWatchLevel)
                 cnodeIndex = -1
@@ -789,93 +797,12 @@ class PackageXML(object):
                         return None
                 syslog.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), syslog.codeWatchLevel)
             return treeNode
-        except:
+        #except:
             syslog.report(
                 '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
                 syslog.errorLevel
             )
-            return None
-    
-    class node(object):
-        level = 0
-        element = None
-        children = None
-        parentElement = None
-        hash = None
-        
-        def __init__(self, element, parent = None, level = 0, levelIndex = 0):
-            self.level = level
-            self.element = element
-            self.children = []
-            self.parentElement = parent
-            self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
-        
-        def parent(self):
-            return self.parentElement
-        
-        def name(self):
-            return self.element.tagName
-        
-        def attr(self, attrName):
-            return self.element.getAttribute(attrName)
-        
-        def hasAttr(self, attrName):
-            return self.element.hasAttribute(attrName)
-        
-        def data(self):
-            try:
-                if not self.element.hasChildNodes():
-                    # Empty node
-                    return ''
-                resultData = []
-                for dataNode in self.element.childNodes:
-                    try:
-                        if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
-                            # Ignore non-data node
-                            del resultData
-                            return ''
-                        resultData.append(dataNode.data)
-                    except:
-                        # Malform XML document
-                        del resultData
-                        return ''
-                return '\n'.join(resultData)
-            except:
-                return ''
-        
-        def child(self, indexNumber = 0):
-            try:
-                return self.children[indexNumber]
-            except:
-                return []
-    
-    class queriedNodes(object):
-        elements = None
-        
-        def __init__(self, elements):
-            self.elements = []
-            for element in elements:
-                if element in self.elements:
-                    continue
-                self.elements.append(element)
-        
-        def eq(self, indexNumber = 0):
-            try:
-                return self.elements[indexNumber]
-            except:
-                return None
-        
-        def list(self):
-            return self.elements
-        
-        def data(self):
-            output = []
-            for element in self.elements:
-                output.append(element.data())
-            return ''.join(output)
-        
-        def length(self):
-            return len(self.elements)
+            #return None
     
     class selectorObject(object):
         SOName = None
@@ -906,6 +833,105 @@ class PackageXML(object):
         
         def filter(self):
             return self.SOFilters
+class YotsubaXMLDOMNode(object):
+    level = 0
+    element = None
+    parentElement = None
+    hash = None
+    children = None
+    
+    def __init__(self, element, parent = None, level = 0, levelIndex = 0):
+        self.level = level
+        self.element = element
+        self.parentElement = parent
+        self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
+        self.children = []
+    
+    def parent(self):
+        return self.parentElement
+    
+    def name(self):
+        return self.element.tagName
+    
+    def attr(self, attrName):
+        return self.element.getAttribute(attrName)
+    
+    def hasAttr(self, attrName):
+        return self.element.hasAttribute(attrName)
+    
+    def data(self):
+        try:
+            if not self.element.hasChildNodes():
+                # Empty node
+                return ''
+            resultData = []
+            for dataNode in self.element.childNodes:
+                try:
+                    if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
+                        # Ignore non-data node
+                        del resultData
+                        return ''
+                    resultData.append(dataNode.data)
+                except:
+                    # Malform XML document
+                    del resultData
+                    return ''
+            return '\n'.join(resultData)
+        except:
+            return ''
+    
+    def child(self, indexNumber = None):
+        try:
+            if indexNumber is None:
+                return self.children
+            else:
+                return self.children[indexNumber]
+        except:
+            return []
+    
+    def get(self, selector):
+        q = PackageXML()
+        q.read(self)
+        return q.get(selector)
+
+class YotsubaXMLQueriedNodes(object):
+    elements = None
+    
+    def __init__(self, elements = []):
+        self.elements = []
+        for element in elements:
+            if element in self.elements:
+                continue
+            self.elements.append(element)
+    
+    def eq(self, indexNumber = None):
+        try:
+            if indexNumber is None:
+                return self.elements
+            else:
+                return self.elements[indexNumber]
+        except:
+            return None
+    
+    def list(self):
+        return self.elements
+    
+    def data(self):
+        output = []
+        for element in self.elements:
+            output.append(element.data())
+        return ''.join(output)
+    
+    def get(self, selector):
+        q = PackageXML()
+        ret = []
+        for element in self.elements:
+            q.read(element)
+            ret.extend(q.get(selector).list())
+        return YotsubaXMLQueriedNodes(ret)
+    
+    def length(self):
+        return len(self.elements)
 
 class PackagePostman(object):
     """
