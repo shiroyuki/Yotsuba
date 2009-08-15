@@ -1,0 +1,9 @@
+#!/bin/sh
+
+cp yotsuba.py egg-packer/yotsuba/__init__.py &&\
+svn export egg-packer temp &&\
+cd temp &&\
+python setup.py bdist_egg &&\
+mv dist/*.egg ../ &&\
+cd ../ &&\
+rm -Rf temp

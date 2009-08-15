@@ -165,8 +165,8 @@ def testForStandaloneMode():
 
     # Test in the standalone mode
     yotsuba.syslog.report("Test the standalone mode")
-    x = yotsuba.PackageXML()
-    y = yotsuba.PackageXML()
+    x = yotsuba.XML()
+    y = yotsuba.XML()
     tEqual("Read XML in the standalone mode (as an instance)", x.read("test.xml"), True)
     c = x.get("c")
     tEqual("Test querying in the standalone mode (as an instance)", c.length(), 1)

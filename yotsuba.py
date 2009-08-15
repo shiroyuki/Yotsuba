@@ -21,7 +21,7 @@ PROJECT_TITLE = "Yotsuba"
 PROJECT_CODENAME = "Kotoba"
 PROJECT_MAJOR_VERSION = 2
 PROJECT_MINOR_VERSION = 0
-PROJECT_STATUS = "beta"
+PROJECT_STATUS = "stable"
 PROJECT_VERSION = "%d.%d (%s)" % (PROJECT_MAJOR_VERSION, PROJECT_MINOR_VERSION, PROJECT_STATUS)
 PROJECT_SIGNATURE = "%s/%s %s" % (PROJECT_TITLE, PROJECT_CODENAME, PROJECT_VERSION)
 
@@ -334,7 +334,7 @@ class XML(object):
                     treeOrg = xml.dom.minidom.parse(source)
                 else:
                     treeOrg = xml.dom.minidom.parseString(source)
-            elif type(source) == YotsubaXMLDOMNode:
+            elif type(source) == DOMElement:
                 tree = source
             else:
                 raise Exception("yotsuba.xml.read: Invalid input")
@@ -387,18 +387,18 @@ class XML(object):
                 syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
-            return YotsubaXMLQueriedNodes()
+            return XMLQueriedNodes()
         
         syslog.report("Looking for [%s]" % selector)
         
-        if not type(treeName) == str and not type(treeName) == YotsubaXMLDOMNode and not type(treeName) == YotsubaXMLQueriedNodes:
+        if not type(treeName) == str and not type(treeName) == DOMElement and not type(treeName) == XMLQueriedNodes:
             syslog.report(
                 '[sdk.xml.query] unexpected types of treeName',
                 syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
             # print "Type of Tree Name:", type(treeName), "::" , str(treeName)
-            return YotsubaXMLQueriedNodes()
+            return XMLQueriedNodes()
         
         # If there is no reference to the tree named by `treeName`, return an empty list.
         if type(treeName) == str and not self.trees.has_key(treeName):
@@ -407,7 +407,7 @@ class XML(object):
                 syslog.warningLevel
             )
             # return nothing if there is not a tree called by treeName
-            return YotsubaXMLQueriedNodes()
+            return XMLQueriedNodes()
         
         # Creates a selector reference
         selectorReference = crypt.hash(selector, ['sha'])
@@ -419,9 +419,9 @@ class XML(object):
         startupNodes = []
         if type(treeName) == str:
             startupNodes.append(self.trees[treeName])
-        elif type(treeName) == YotsubaXMLDOMNode:
+        elif type(treeName) == DOMElement:
             startupNodes.append(treeName)
-        elif type(treeName) == YotsubaXMLQueriedNodes:
+        elif type(treeName) == XMLQueriedNodes:
             startupNodes.extend(treeName.list())
         else:
             raise Exception("Failed to determine the list of startup nodes for querying\ntreeName is of type %s" % str(type(treeName)))
@@ -465,7 +465,7 @@ class XML(object):
                 self.locks['referencing'].release()
             except:
                 print "Removing referencing denied"
-        return YotsubaXMLQueriedNodes(resultList)
+        return XMLQueriedNodes(resultList)
     
     def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
         """
@@ -777,7 +777,7 @@ class XML(object):
         #try:
         if True:
             # Class-node instance of the parameter `node`
-            treeNode = YotsubaXMLDOMNode(node, parentNode, level, levelIndex)
+            treeNode = DOMElement(node, parentNode, level, levelIndex)
             if len(node.childNodes) > 0:
                 syslog.report('%d:%s > Constructing children' % (level, treeNode.name()), syslog.codeWatchLevel)
                 cnodeIndex = -1
@@ -833,7 +833,7 @@ class XML(object):
         
         def filter(self):
             return self.SOFilters
-class YotsubaXMLDOMNode(object):
+class DOMElement(object):
     level = 0
     element = None
     parentElement = None
@@ -894,7 +894,7 @@ class YotsubaXMLDOMNode(object):
         q.read(self)
         return q.get(selector)
 
-class YotsubaXMLQueriedNodes(object):
+class XMLQueriedNodes(object):
     elements = None
     
     def __init__(self, elements = []):
@@ -928,12 +928,12 @@ class YotsubaXMLQueriedNodes(object):
         for element in self.elements:
             q.read(element)
             ret.extend(q.get(selector).list())
-        return YotsubaXMLQueriedNodes(ret)
+        return XMLQueriedNodes(ret)
     
     def length(self):
         return len(self.elements)
 
-class PackagePostman(object):
+class Postman(object):
     """
     Mail sender
     """
@@ -979,7 +979,7 @@ class PackagePostman(object):
             postman.sendmail(self.__from, package.destination, package.compile())
         postman.quit()
 
-class PackageMail(object):
+class MailPackage(object):
     """
     Message Holder
     """

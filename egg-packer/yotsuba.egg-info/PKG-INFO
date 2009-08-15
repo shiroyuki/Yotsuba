@@ -1,13 +1,12 @@
 Metadata-Version: 1.0
 Name: yotsuba
-Version: 2.0-beta
-Summary: Software Development Kit for Web Developers
+Version: 2.0
+Summary: Software Development Kit for new Python Developers
 Home-page: http://yotsuba.shiroyuki.com
 Author: Juti Noppornpitak
-Author-email: juti@primalfusion.com
+Author-email: juti_n@yahoo.co.jp
 License: LGPL
-Description: Yotsuba is a software development kit for web developers.
-        
+Description: Yotsuba is a library and a software development kit for new Python developers.
 Keywords: Web,XML,Mail,API,SDK
 Platform: UNKNOWN
 Classifier: License :: OSI Approved :: GNU Library or Lesser General Public License (LGPL)

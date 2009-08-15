@@ -1,25 +1,17 @@
 #!/usr/bin/python
-# Yotsuba SDK and Framework
-# Version 2.0 (Developmental)????????
+# Yotsuba 2.0 (Stable)
+# Project Yotsuba
 # (C) 2007 Juti Noppornpitak <juti_n@yahoo.co.jp>
-# License: LGPL
+# License: GNU Lesser General Public License and MIT License
 
 # For testing features
 import os
 import sys
 import re
-import StringIO
 import hashlib
 import base64
 import xml.dom.minidom
 import cPickle
-import pickle
-import Cookie
-import mimetypes
-import MimeWriter
-import email
-import poplib
-import imaplib
 import smtplib
 
 # For experimental features
@@ -29,7 +21,7 @@ PROJECT_TITLE = "Yotsuba"
 PROJECT_CODENAME = "Kotoba"
 PROJECT_MAJOR_VERSION = 2
 PROJECT_MINOR_VERSION = 0
-PROJECT_STATUS = "beta"
+PROJECT_STATUS = "stable"
 PROJECT_VERSION = "%d.%d (%s)" % (PROJECT_MAJOR_VERSION, PROJECT_MINOR_VERSION, PROJECT_STATUS)
 PROJECT_SIGNATURE = "%s/%s %s" % (PROJECT_TITLE, PROJECT_CODENAME, PROJECT_VERSION)
 
@@ -49,7 +41,7 @@ WRITE_NORMAL    = 'w'
 WRITE_BINARY    = 'wb'
 WRITE_PICKLE    = 'pickle::write'
 
-class YotsubaPackageSystemLog:
+class SystemLog:
     # Local configuration
     maxAllowedLevel = 2
     # Flags
@@ -103,32 +95,7 @@ class YotsubaPackageSystemLog:
             self.content = content
             self.level = level
 
-
-class YotsubaPackageTimeMaster:
-    """
-    This package is the simple version of the time object in Python.
-    """
-    def getTimeCodeInteger(self, timeObject = None):
-        from time import gmtime, strftime
-        if not timeObject:
-            timeObject = gmtime()
-        return int(strftime("%Y%m%d%H%M", timeObject))
-
-    def readTimeCode(self, timeCode):
-        result = [0, 0, 0, 0, 0]
-        try:
-            for i in range(5):
-                result[i] = int(timecode/pow(10, 8 - 2*i))
-                result.append(str(result[i]))
-                red_timecode = int(result[i]*pow(10, 8 - 2*i))
-                timecode -= red_timecode
-        except:
-            syslog.report('[sdk.time.readTimeCode] there was an error occurred during parsing the time code.', syslog.errorLevel)
-        return result
-
-
-
-class YotsubaPackageCryptographer:
+class Cryptographer:
     cryptographicDepthLevel = 10
 
     def serialise(self, dataObject):
@@ -160,299 +127,7 @@ class YotsubaPackageCryptographer:
             rstring = base64.b64decode(rstring)
         return rstring
 
-class YotsubaPackageBlog:
-    """
-    yotsuba.sdk.log
-
-    Content intepretation and log-base processing package
-    """
-
-    # Add slashes to the given string
-    def addslashes(self, string):
-        return re.sub("'", "\\'", string)
-
-    # Convert a given context to a wiki-like content.
-    # This function uses the same rule that mediawiki uses.
-    def convert_to_wiki(self, content):
-        raw_lines = re.split('(\r\n|\n|\r)', content)
-        lines = []
-        result = []
-        for line in raw_lines:
-            lines.append(re.split('( |<.*>)', line))
-            for i in range(0, len(lines[-1])):
-                if re.match('(http|https|ftp|sftp|irc)\://', lines[-1][i]):
-                    temp = re.sub('^\.+', '', lines[-1][i])
-                    temp = re.sub('\.+$', '', temp)
-                    temp_link = '<a href="%s">%s</a>' % (temp, temp)
-                    content = re.sub(temp, temp_link, content)
-        return content
-
-class YotsubaPackageMail:
-    defaultMessageSubject = 'Untitled Message'
-    re_validEmailAddress = re.compile("[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*\@[a-z0-9\-\+\_]+(\.[a-z0-9\-\+\_]+)*(\.[a-z]+)+$")
-    connectionNodes = {}
-    messages = {}
-
-    def validateEmailAddress(self, emailAddr):
-        return not self.re_validEmailAddress.match(emailAddr) == None
-
-    def addConnection(self, connectionName):
-        if self.connectionNodes.has_key(connectionName):
-            return False
-        # Add a connection node
-        self.connectionNodes[connectionName] = None
-        return True
-
-    def removeConnection(self, connectionName):
-        try:
-            del self.connectionNodes[connectionName]
-            return True
-        except:
-            return False
-
-    def connection(self, connectionName):
-        return self.connectionNodes
-
-    def addMessage(self, messageName):
-        if self.messages.has_key(messageName):
-            return False
-        # Add a connection node
-        self.messages[messageName] = None
-        return True
-
-    def removeMessage(self, messageName):
-        try:
-            del self.messages[messageName]
-            return True
-        except:
-            return False
-
-    def message(self, messageName):
-        return self.messages[messageName]
-
-    def send(self, connectionName, messageNames):
-        if type(messageName) == dict:
-            for messageName in messageNames:
-                # send a message
-                pass
-        else:
-            # send a message
-            pass
-        pass
-
-    def receive(self, connectionName):
-        pass
-
-class YotsubaPackageEnvironmentController:
-    """
-    Environment Controller
-
-    This is a legacy class. It is no longer recommended to use in the
-    development. This class is still present as a prototype for any
-    developer who is interested how to handle session data, cookies and
-    the header of a HTML document from scatch.
-
-    This function is refactored from Yotsuba SDK 1 without testing. Any uses
-    of this function without testing if it works properly is not recommended.
-    """
-
-    headers = {
-        'Content-Type': DEFAULT_CONTENT_TYPE
-    }
-    cookies = Cookie.SimpleCookie()
-    session = None
-    sessionPath = ''
-
-    def env(self, keyIndex):
-        if os.environ.has_key(keyIndex):
-            return os.environ[keyIndex]
-        else:
-            return None
-
-    def header(self, key = None, value = None, selfPrint = False):
-        if key:
-            try:
-                if value and type(x) == str:
-                    self.headers[key] = value
-                return self.headers[key]
-            except:
-                syslog.report(
-                    "[fw.ec.header] failed to retrieve a value of header %s"\
-                    % key,
-                    syslog.warningLevel
-                )
-        else:
-            lines = []
-            for k, v in headers.iteritems():
-                lines.append('%s: %s' % (k, v))
-            result = '%s\n%s\n\n' % ('\n'.join(lines), self.printCookie())
-            if selfPrint:
-                print result
-            return result
-    # Cookies
-    def cookie(self, key, newValue = ''):
-        if newValue == '':
-            cookies[key] = newValue
-        return cookies[key].value
-
-    def printCookie(self):
-        return cookies.output()
-
-    # Sessions
-    def session(self, key, newValue = None):
-        # Initialization
-        localRenewSession = False
-        # If the session data is not initialized, then the initialization will
-        # be preceeded first by default.
-        if not self.session:
-            self.session = self.SessionObject()
-            syslog.report("[fw.ec.session] Initialized the session information")
-            sid = self.cookie('sid')
-            locationToLoad = fs.abspath(self.sessionPath + '/' + sid, True)
-            if sid and fs.exists(locationToLoad):
-                try:
-                    self.session = fs.read(locationToLoad, READ_PICKLE)
-                    if self.session:
-                        syslog.report("[fw.ex.session] Session '%s' restored" % sid)
-                    else:
-                        localRenewSession = True
-                        syslog.report("[fw.ex.session] Session '%s' failed to be restored" % sid, syslog.warningLevel)
-                except:
-                    localRenewSession = True
-                    syslog.report("[fw.ex.session] Session '%s' failed to be restored as fs threw exception." % sid, syslog.errorLevel)
-            else:
-                sid = hashlib.new(str(time.time())).hexdigest()
-                self.session.id = sid
-            self.cookie('sid', sid)
-        # Then, load or change the data.
-        if not self.session.data.has_key(key) and not newValue:
-            syslog.report("[fw.ec.session] No session variable '%s' found" % key, syslog.warningLevel)
-        if not newValue == None:
-            session.data[key] = newValue
-            syslog.report("[fw.ec.session] Session variable '%s' updated" % key)
-        # Save only if there is update
-        if not newValue == None:
-            if self.sessionSave():
-                syslog.report("[fw.ec.session] Session variable '%s' stored" % key)
-                return self.session.data[key]
-            else:
-                syslog.report("[fw.ec.session] Session variable '%s' not stored" % key, syslog.warningLevel)
-                return None
-        if self.session.data.has_key(key):
-            syslog.report("[fw.ec.session] Session variable '%s' accessed" % key)
-            return self.session.data[key]
-        syslog.report("[fw.ec.session] Session variable '%s' not found" % key)
-        return None
-
-    def sessionSave(self):
-        # Look for session ID
-        if not self.session:
-            syslog.report("[fw.ec.sessionSave] The session identifier is invalid.", syslog.errorLevel)
-            return False
-        # Look for the configuration for the session storage
-        if not self.sessionPath == '':
-            self.sessionPath = DEFAULT_PATH_TO_SESSION_STORAGE
-        # Look for the session storage
-        # CASE: Cannot find the session storage.
-        if not fs.exists(self.sessionsPath):
-            syslog.report("[fw.ec.sessionSave] The session storage does not exist.", syslog.warningLevel)
-            if fs.mkdir(self.sessionPath):
-                syslog.report("[fw.ec.sessionSave] The session storage is initialized.")
-                if fs.writable(self.sessionPath):
-                    syslog.report("[fw.ec.sessionSave] The session storage is confirmed to be accessible.")
-            else:
-                syslog.report("[fw.ec.sessionSave] The creation of the session storage is not permitted.", syslog.errorLevel)
-        # CASE: The session storage is found.
-        else:
-            syslog.report("[fw.ec.sessionSave] Found the session storage")
-        # Prepare the path of the session storage for this session
-        locationToSave = fs.abspath(self.sessionPath + '/' + self.session.id, True)
-        # Locate the existed information of this session
-        if not fs.exists(locationToSave):
-            syslog.report("[fw.ec.sessionSave] Session ID '%s' does not exists but it will be automatically generated." % self.session.id, syslog.warningLevel)
-        # Test writing
-        if not fs.writable(locationToSave):
-            syslog.report("[fw.ec.sessionSave] Session ID '%s' is not saved as backing up this session is not permitted." % self.session.id, syslog.warningLevel)
-            return False
-        # Backup
-        if not fs.write(locationToSave, self.session.data, WRITE_PICKLE):
-            syslog.report("[fw.ec.sessionSave] Session '%s' is not saved as the result of failed backup." % self.session.id, syslog.errorLevel)
-            return False
-        return True
-
-    class SessionObject:
-        id = None
-        data = {}
-
-        def __init__(self, id):
-            self.id = id
-
-class YotsubaPackageURICreator:
-    """
-    URL Creation Package
-    """
-    minimumLengthOfQueryString = 3
-
-    def buildQueryString(self, queryHash = None):
-        if not queryHash:
-            return ''
-        if len(queryHash.keys()) <= 0:
-            return ''
-        resultString = []
-        for queryKey, queryValue in queryHash:
-            if queryKey == '' or queryValue == '':
-                syslog.report('Empty query key or value is used in fw.url.buildQieryString', syslog.warningLevel)
-                continue
-            resultString.append('%s=%s' % (queryKey, queryValue))
-        return '&'.join(resultString)
-
-    def buildURL(self, destination, queryHash = None, port = None):
-        queryString = self.buildQueryString(queryHash)
-        resultURL = destination
-        if not re.match(".+\://.+", destination):
-            resultURL += 'http://' + destination
-        if port and type(port) == int:
-            if re.match("\?", resultURL):
-                resultURLCom = re.split('\?', resultURL, 1)
-                resultURL += '%s:%d?%s' % (resultURLCom[0], port, resultURLCom[1])
-            else:
-                resultURL += ':%d' % port
-        if queryString and len(queryString) >= self.minimumLengthOfQueryString:
-            resultURL += '?%s' % queryString
-        return resultURL
-
-class YotsubaCore:
-    log = YotsubaPackageSystemLog()
-    
-    testBiggerLock = thread.allocate_lock()
-    testLock = thread.allocate_lock()
-    enter = []
-    exit = []
-    x = 0
-    
-    def multiThreadTest(self):
-        self.testBiggerLock.acquire()
-        print "Checkpoint 1"
-        for i in range(200):
-            thread.start_new(self.counter, (i,))
-        print "Checkpoint 2"
-        self.testBiggerLock.release()
-        self.testBiggerLock.acquire()
-        print "Checkpoint 3"
-        print self.x
-        print self.enter
-        print self.exit
-        print "Checkpoint 4"
-        self.testBiggerLock.release()
-        
-    def counter(self, i):
-        print "Run ", i
-        self.enter.append(i)
-        for j in range(200):
-            self.x = i * j
-        self.exit.append(i)
-
-class YotsubaPackageFileSystemInterface:
+class FileSystemInterface:
     # Make directory
     def mkdir(self, destpath):
         try:
@@ -605,7 +280,14 @@ class YotsubaPackageFileSystemInterface:
             return True
         return False
 
-class YotsubaPackageXML:
+class XML(object):
+    """
+    XML parser using CSS3 selector.
+    
+    Normally, this package is already instantiated upon importing this library.
+    However, when the user instantiates an instance of this class, the internal
+    term here is "Standalone Mode"
+    """
     rule_descendantCombinator = ' '
     rule_childCombinator = '>'
     rule_adjacentSiblingCombinator = '+'
@@ -615,6 +297,7 @@ class YotsubaPackageXML:
         rule_adjacentSiblingCombinator,
         rule_generalSiblingCombinator
     ]
+    defaultTreeName = 'defaultTree' # for the standalone mode
     trees = {}
     locks = {}
     runningThreads = {}
@@ -629,20 +312,32 @@ class YotsubaPackageXML:
         This is a prototype.
         """
         self.locks['referencing'] = thread.allocate_lock()
+        #self.__type__ = "yotsuba"
     
-    def read(self, treeName, source):
+    def read(self, *params):
         """
         Read and parse either a XML-formatted string or a XML document file and
         store for querying.
         """
+        if len(params) == 0:
+            raise Exception("Expect at least one parameter, which indicates the source of the document or the XML-formatted string.");
+        treeName = self.defaultTreeName
+        source = params[-1]
+        if len(params) > 1:
+            treeName = params[0]
         tree = None
         treeOrg = None
         syslog.report('sdk.xml.read')
         try:
-            if fs.exists(source):
-                treeOrg = xml.dom.minidom.parse(source)
+            if type(source) == str:
+                if fs.exists(source):
+                    treeOrg = xml.dom.minidom.parse(source)
+                else:
+                    treeOrg = xml.dom.minidom.parseString(source)
+            elif type(source) == DOMElement:
+                tree = source
             else:
-                treeOrg = xml.dom.minidom.parseString(source)
+                raise Exception("yotsuba.xml.read: Invalid input")
         except:
             syslog.report(
                 '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
@@ -650,12 +345,14 @@ class YotsubaPackageXML:
                 syslog.errorLevel
             )
             return False
+        #if True:
         try:
-            for node in treeOrg.childNodes:
-                if not node.nodeType == node.ELEMENT_NODE:
-                    continue
-                tree = self.buildTreeOnTheFly(node)
-                break
+            if tree is None:
+                for node in treeOrg.childNodes:
+                    if not node.nodeType == node.ELEMENT_NODE:
+                        continue
+                    tree = self.buildTreeOnTheFly(node)
+                    break
             self.trees[treeName] = tree
         except:
             syslog.report(
@@ -664,22 +361,45 @@ class YotsubaPackageXML:
             )
             return False
         del treeOrg
-        return True
+        return tree is not None
+    
+    def get(self, selector, useMultiThread = False):
+        """
+        Get elements according to the supplied combination of CSS-3 selectors.
+        This method is suitable for the standalone/default mode.
+        """
+        syslog.report("(Interface) Looking for [%s]" % selector)
+        return self.query(self.defaultTreeName, selector, useMultiThread)
     
     def query(self, treeName, selector, useMultiThread = False):
         """
-        Query for elements according to the supplied combination of CSS-3 selectors.
+        Query for elements according to the supplied combination of CSS-3
+        selectors. This method is suitable if there are multiple trees within
+        one instance of XML.
+        
+        (Note: The goal is to support a value of treeName as an instance of self.node
+        and self.queryNodes. The support on self.node is not quite working.)
         """
         # If `treeName` and `selector` are not of type string, returns an empty list.
-        if not type(selector) == str or  not type(treeName) == str:
+        if not type(selector) == str:
             syslog.report(
-                '[sdk.xml.query] unexpected types of treeName and selector',
+                '[sdk.xml.query] unexpected types of the selector',
                 syslog.warningLevel
             )
             # return nothing if either no treeName or no selector is not a string
-            return self.queriedNodes([])
-        else:
-            pass
+            return XMLQueriedNodes()
+        
+        syslog.report("Looking for [%s]" % selector)
+        
+        if not type(treeName) == str and not type(treeName) == DOMElement and not type(treeName) == XMLQueriedNodes:
+            syslog.report(
+                '[sdk.xml.query] unexpected types of treeName',
+                syslog.warningLevel
+            )
+            # return nothing if either no treeName or no selector is not a string
+            # print "Type of Tree Name:", type(treeName), "::" , str(treeName)
+            return XMLQueriedNodes()
+        
         # If there is no reference to the tree named by `treeName`, return an empty list.
         if type(treeName) == str and not self.trees.has_key(treeName):
             syslog.report(
@@ -687,20 +407,25 @@ class YotsubaPackageXML:
                 syslog.warningLevel
             )
             # return nothing if there is not a tree called by treeName
-            return self.queriedNodes([])
-        else:
-            pass
+            return XMLQueriedNodes()
+        
         # Creates a selector reference
         selectorReference = crypt.hash(selector, ['sha'])
         # Initializes the list of queried nodes
         resultList = []
         self.sharedMemory[selectorReference] = []
+        
         # Gets the reference to the root node
-        startupNode = None
-        try:
-            startupNode = self.trees[treeName]
-        except:
-            startupNode = treeName
+        startupNodes = []
+        if type(treeName) == str:
+            startupNodes.append(self.trees[treeName])
+        elif type(treeName) == DOMElement:
+            startupNodes.append(treeName)
+        elif type(treeName) == XMLQueriedNodes:
+            startupNodes.extend(treeName.list())
+        else:
+            raise Exception("Failed to determine the list of startup nodes for querying\ntreeName is of type %s" % str(type(treeName)))
+        
         # Queries cleanup (Clear out the tab character)
         selector = re.sub("\t", " ", selector)
         # Engroups
@@ -713,14 +438,16 @@ class YotsubaPackageXML:
             self.exitedThreads[selectorReference] = []
         
         for query in queries:
-            # Multi-threading feature
-            if useMultiThread:
-                if query in self.runningThreads[selectorReference]:
-                    continue
-                self.runningThreads[selectorReference].append(query)
-                thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
-            else:
-                self.queryWithOneSelector(selectorReference, startupNode, query, False)
+            for startupNode in startupNodes:
+                syslog.report("Query for [%s]" % query)
+                # Multi-threading feature
+                if useMultiThread:
+                    if query in self.runningThreads[selectorReference]:
+                        continue
+                    self.runningThreads[selectorReference].append(query)
+                    thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
+                else:
+                    self.queryWithOneSelector(selectorReference, startupNode, query, False)
         
         self.locks[selectorReference].acquire()
         resultList = self.sharedMemory[selectorReference]
@@ -738,7 +465,7 @@ class YotsubaPackageXML:
                 self.locks['referencing'].release()
             except:
                 print "Removing referencing denied"
-        return self.queriedNodes(resultList)
+        return XMLQueriedNodes(resultList)
     
     def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
         """
@@ -746,12 +473,15 @@ class YotsubaPackageXML:
         not meant to be used directly. Please use query(...) instead.
         """
         # Gets the path
+        syslog.report("Started querying with one selector [%s]" % query)
         combination = re.split("\ +", query.strip())
         if len(combination) > 0:
             try:
+                syslog.report("Extending the shared memory")
                 self.sharedMemory[selectorReference].extend(
                     self.traverse(startupNode, combination)
                 )
+                syslog.report("Extended the shared memory")
                 if useMultiThread:
                     self.exitedThreads[selectorReference].append(query)
             except:
@@ -774,6 +504,7 @@ class YotsubaPackageXML:
                 "No operation [%s]" % selectorReference,
                 syslog.errorLevel
             )
+        syslog.report("Stopped querying with one selector")
     
     def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
         """
@@ -788,9 +519,14 @@ class YotsubaPackageXML:
         for the description of parameters
         """
         try:
+            syslog.report("Traverse [%d/%s:%d:%s]" % (node.level, node.name(), selectorLevel, ' '.join(selector)))
             rule = self.rule_descendantCombinator
             # If there is no selector, return an empty list
             if selectorLevel >= len(selector):
+                syslog.report(
+                    '%d:%s\n\t|_ Could not find one (SLV:%d != SLN:"%s")' % (node.level, node.name(), selectorLevel, ' '.join(selector)),
+                    syslog.warningLevel
+                )
                 return []
             if selector[selectorLevel] in self.specialRules:
                 selectorLevel += 1
@@ -803,21 +539,21 @@ class YotsubaPackageXML:
                     )
             # If two or more rules are specified consecutively, regards this selector as ill-formatted
             if selector[selectorLevel] in self.specialRules:
+                syslog.report("Consecutive hierarchical directive found", syslog.warningLevel)
                 return []
             # Makes the selector object
             s = self.makeSelectorObject(selector[selectorLevel])
             # First, check if the current element is on the path regardless to the attributes and some filtering options
-            isTheNodeOnThePath = \
-                ( \
-                    s.name() == '*' \
-                ) or ( \
-                    s.name() == '' \
-                    and ( \
-                        len(s.attr().keys()) > 0 \
-                        or len(s.filter()) > 0 \
-                    ) \
-                ) or ( \
-                    s.name() == node.name() \
+            isTheNodeOnThePath = (
+                    s.name() == '*'
+                ) or (
+                    s.name() == ''
+                    and (
+                        len(s.attr().keys()) > 0
+                        or len(s.filter()) > 0
+                    )
+                ) or (
+                    s.name() == node.name()
                 )
             # Second, uses attributes to filter out the element that is not qualified.
             # (attrIndex = [EQUALITY_SIGN, [SPECIFIC_VALUE]]
@@ -883,6 +619,7 @@ class YotsubaPackageXML:
                     return []
             # Handle a heirarchy combinator
             elif rule == self.rule_descendantCombinator:
+                isTheEndOfPathReached = self.isTheEndOfPathReached(selector, selectorLevel)
                 # If the node is on the path and it is the end of the path
                 if isTheNodeOnThePath and self.isTheEndOfPathReached(selector, selectorLevel):
                     # If the last element required on the path is a wild card,
@@ -891,6 +628,9 @@ class YotsubaPackageXML:
                         selectorLevel -= 1
                     else: pass
                     resultList.append(node)
+                else:
+                    syslog.report( "ON_PATH_FINALE %s" % str(isTheNodeOnThePath) )
+                    syslog.report( "BOTTOM_OF_TREE %s" % str(isTheEndOfPathReached) )
                 cnodeIndex = -1
                 doSkip = True
                 for cnode in node.children:
@@ -923,6 +663,7 @@ class YotsubaPackageXML:
                 return resultList
             # No rule applied
             else:
+                syslog.report("What is this combination?")
                 return []
         except:
             syslog.report(
@@ -1033,9 +774,10 @@ class YotsubaPackageXML:
         if not node.nodeType == node.ELEMENT_NODE:
             # Ignore non-element node
             return None
-        try:
+        #try:
+        if True:
             # Class-node instance of the parameter `node`
-            treeNode = self.node(node, parentNode, level, levelIndex)
+            treeNode = DOMElement(node, parentNode, level, levelIndex)
             if len(node.childNodes) > 0:
                 syslog.report('%d:%s > Constructing children' % (level, treeNode.name()), syslog.codeWatchLevel)
                 cnodeIndex = -1
@@ -1055,94 +797,14 @@ class YotsubaPackageXML:
                         return None
                 syslog.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), syslog.codeWatchLevel)
             return treeNode
-        except:
+        #except:
             syslog.report(
                 '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
                 syslog.errorLevel
             )
-            return None
+            #return None
     
-    class node:
-        level = 0
-        element = None
-        children = None
-        parentElement = None
-        hash = None
-        
-        def __init__(self, element, parent = None, level = 0, levelIndex = 0):
-            self.level = level
-            self.element = element
-            self.children = []
-            self.parentElement = parent
-            self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
-        
-        def parent(self):
-            return self.parentElement
-        
-        def name(self):
-            return self.element.tagName
-        
-        def attr(self, attrName):
-            return self.element.getAttribute(attrName)
-        
-        def hasAttr(self, attrName):
-            return self.element.hasAttribute(attrName)
-        
-        def data(self):
-            try:
-                if not self.element.hasChildNodes():
-                    # Empty node
-                    return ''
-                resultData = []
-                for dataNode in self.element.childNodes:
-                    try:
-                        if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
-                            # Ignore non-data node
-                            del resultData
-                            return ''
-                        resultData.append(dataNode.data)
-                    except:
-                        # Malform XML document
-                        del resultData
-                        return ''
-                return '\n'.join(resultData)
-            except:
-                return ''
-        
-        def child(self, indexNumber = 0):
-            try:
-                return self.children[indexNumber]
-            except:
-                return []
-    
-    class queriedNodes:
-        elements = None
-        
-        def __init__(self, elements):
-            self.elements = []
-            for element in elements:
-                if element in self.elements:
-                    continue
-                self.elements.append(element)
-        
-        def eq(self, indexNumber = 0):
-            try:
-                return self.elements[indexNumber]
-            except:
-                return None
-        
-        def list(self):
-            return self.elements
-        
-        def data(self):
-            output = []
-            for element in self.elements:
-                output.append(element.data())
-            return ''.join(output)
-        
-        def length(self):
-            return len(self.elements)
-    class selectorObject:
+    class selectorObject(object):
         SOName = None
         SOAttrs = None
         SOFilters = None
@@ -1171,352 +833,193 @@ class YotsubaPackageXML:
         
         def filter(self):
             return self.SOFilters
-
-class MailerObject:
-    _server = None
-    _port = None
-    _SSLEnabled = False
-    _username = None
-    _password = None
+class DOMElement(object):
+    level = 0
+    element = None
+    parentElement = None
+    hash = None
+    children = None
     
-    def __init__(self, server, port = None, SSLEnabled = False):
-        self.server(server)
-        self.port(port)
-        self.enableSSL(SSLEnabled)
+    def __init__(self, element, parent = None, level = 0, levelIndex = 0):
+        self.level = level
+        self.element = element
+        self.parentElement = parent
+        self.hash = hashlib.md5("%s:%s:%s" % (level, levelIndex, element.tagName)).hexdigest()
+        self.children = []
     
-    def server(self, server = None):
-        if server is not None:
-            self._server = server
-        return self._server
+    def parent(self):
+        return self.parentElement
     
-    def port(self, port = None):
-        if port is not None:
-            self._port = port
-        return self._port
+    def name(self):
+        return self.element.tagName
     
-    def SSLEnabled(self, enable = None):
-        if enable is not None:
-            self._SSLEnabled = enable
-        return self._SSLEnabled
+    def attr(self, attrName):
+        return self.element.getAttribute(attrName)
     
-    def username(self, username = None):
-        if username is not None:
-            self._username = username
-        return self._username
+    def hasAttr(self, attrName):
+        return self.element.hasAttribute(attrName)
     
-    def password(self, password = None):
-        if password is not None:
-            self._password = password
-        return self._password
-    
-    def connect(self, username = None, password = None):
-        if username is not None:
-            self.username(username)
-        if password is not None:
-            self.password(password)
-
-class MailSender(MailerObject):
-    sender = None
-    _from = None
-    _to = None
-    _cc = None
-    _bcc = None
-    
-    def __init__(self, server, port = None, SSLEnabled = False):
-        MailerObject.__init__(self, server, port, SSLEnabled)
-        self.useSMTP()
-    
-    def useSMTP(self):
-        if self.port() is None and not self.SSLEnabled():
-            self.port(poplib.POP3_PORT)
-        elif self.port() is None and self.SSLEnabled():
-            self.port(poplib.POP3_SSL_PORT)
-        if self.SSLEnabled():
-            self.sender = smtplib.SMTP_SSL(self.server(), self.port())
-        else:
-            self.sender = smtplib.SMTP(self.server(), self.port())
-    
-    def connect(self, username = None, password = None):
-        MailerObject.connect(username, password)
+    def data(self):
         try:
-            self.sender.login(self.username(), self.password())
-            return True
+            if not self.element.hasChildNodes():
+                # Empty node
+                return ''
+            resultData = []
+            for dataNode in self.element.childNodes:
+                try:
+                    if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
+                        # Ignore non-data node
+                        del resultData
+                        return ''
+                    resultData.append(dataNode.data)
+                except:
+                    # Malform XML document
+                    del resultData
+                    return ''
+            return '\n'.join(resultData)
         except:
-            return False
+            return ''
+    
+    def child(self, indexNumber = None):
+        try:
+            if indexNumber is None:
+                return self.children
+            else:
+                return self.children[indexNumber]
+        except:
+            return []
+    
+    def get(self, selector):
+        q = XML()
+        q.read(self)
+        return q.get(selector)
+
+class XMLQueriedNodes(object):
+    elements = None
+    
+    def __init__(self, elements = []):
+        self.elements = []
+        for element in elements:
+            if element in self.elements:
+                continue
+            self.elements.append(element)
+    
+    def eq(self, indexNumber = None):
+        try:
+            if indexNumber is None:
+                return self.elements
+            else:
+                return self.elements[indexNumber]
+        except:
+            return None
+    
+    def list(self):
+        return self.elements
+    
+    def data(self):
+        output = []
+        for element in self.elements:
+            output.append(element.data())
+        return ''.join(output)
+    
+    def get(self, selector):
+        q = XML()
+        ret = []
+        for element in self.elements:
+            q.read(element)
+            ret.extend(q.get(selector).list())
+        return XMLQueriedNodes(ret)
+    
+    def length(self):
+        return len(self.elements)
+
+class Postman(object):
+    """
+    Mail sender
+    """
+    __username = None
+    __password = None
+    __server = None
+    __port = None
+    __ssl = None
+    __packages = None
+    __from = None
+    
+    def __init__(self, yourself, server = 'localhost', port = None, secure = False):
+        if yourself is not None:
+            self.initialize(yourself, server, port, secure)
+    
+    def initialize(self, yourself, server = 'localhost', port = None, secure = False):
+        self.__from = yourself
+        self.__server = server
+        if port is None:
+            if secure:
+                self.__port = 465
+            else:
+                self.__port = 25
+        else:
+            self.__port = port
+        self.__ssl = secure
+        self.__packages = []
+    
+    def login(self, username, password):
+        self.__username = username
+        self.__password = password
+    
+    def addPackage(self, package):
+        self.__packages.append(package)
     
     def send(self):
-        pass
-    
-    def disconnect(self):
-        try:
-            self.sender.quit()
-            return True
-        except:
-            return False
+        if self.__from is None:
+            return
+        postman = smtplib.SMTP(self.__server, self.__port)
+        if self.__ssl:
+            postman = smtplib.SMTP_SSL(self.__server, self.__port)
+        for package in self.__packages:
+            postman.sendmail(self.__from, package.destination, package.compile())
+        postman.quit()
 
-class MailReceiver(MailerObject):
-    receiver = None
-    isIMAP = False
+class MailPackage(object):
+    """
+    Message Holder
+    """
+    destination = None
+    __headers = None
+    __title = None
+    __content = None
+    __type = None
     
-    def usePOP(self):
-        if self.port() is None and not self.SSLEnabled():
-            self.port(poplib.POP3_PORT)
-        elif self.port() is None and self.SSLEnabled():
-            self.port(poplib.POP3_SSL_PORT)
-        
-        if self.SSLEnabled():
-            self.receiver = poplib.POP3_SSL(self.server(), self.port())
-        else:
-            self.receiver = poplib.POP3(self.server(), self.port())
-        self.isIMAP = False
+    def __init__(self, to, title, content, type = 'text/plain'):
+        self.__headers = {
+            'To': to,
+            'Content-Type': type
+        }
+        self.destination = to
+        self.__title = title
+        self.__content = content
     
-    def useIMAP(self):
-        if self.port() is None and not self.SSLEnabled():
-            self.port(imaplib.IMAP4_PORT)
-        elif self.port() is None and self.SSLEnabled():
-            self.port(imaplib.IMAP4_SSL_PORT)
-        
-        if self.SSLEnabled():
-            self.receiver = imaplib.IMAP4_SSL(self.server(), self.port())
-        else:
-            self.receiver = imaplib.IMAP4(self.server(), self.port())
-        self.isIMAP = True
+    def header(self, key, value = None):
+        if value is not None:
+            self.__headers[key] = value
+        if key in self.__headers:
+            return self.__headers[key]
+        return ''
     
-    def connect(self, username = None, password = None):
-        MailerObject.connect(username, password)
-        try:
-            if self.isIMAP:
-                self.receiver.login(self.username(), self.password())
-            else:
-                self.receiver.user(self.username())
-                self.receiver.pass_(self.password())
-        except Exception, e:
-            syslog.report(e, syslog.errorLevel)
-    
-    def disconnect(self):
-        try:
-            if self.isIMAP:
-                self.receiver.logout()
-            else:
-                self.receiver.quit()
-            del self._messages
-            self._messages = []
-            return True
-        except:
-            return False
-    
-    def getNumberOfMessages(self):
-        try:
-            if self.isIMAP:
-                return 0
-            else:
-                return self.receiver.stat()[0]
-        except:
-            return -1
-    
-    def getSizeOfMailbox(self):
-        try:
-            if self.isIMAP:
-                return 0
-            else:
-                return self.receiver.stat()[1]
-        except:
-            return -1
-    
-    def read(self, messageID, numberOfLines = 0):
-        message = None
-        rmessage = None
-        if self.isIMAP:
-            # Not currently supported
-            return None
-        else:
-            if numberOfLines < 1:
-                rmessage = self.receiver.top(messageID, numberOfLines)
-            else:
-                rmessage = self.receiver.retr(messageID)
-        
-        message = MailMessage()
-        message.decrypt(message, self.isIMAP)
-        
-        return message
+    def compile(self):
+        compiledHeader = []
+        for k, v in self.__headers:
+            compiledHeader.append("%s: %s" % (k, v))
+        return '\r\n'.join(['\r\n'.join(compiledHeader), self.__content])
 
-class MailMessage:
-    headers = {}
-    
-    defaultMessageContentType = 'text/html'
-    subject = 'Untitled Message'
-    charset = None
-    
-    locked = False
-    
-    data = {
-        'reponse':  '',
-        'subject':  '',
-        'OContent': [], # Original Content
-        'PContent': [], # Processed Content
-        'size':     0
-    }
-    
-    dataBlocks = []
-    
-    textMessageComponents = []
-    
-    HTMLMessageComponents = []
-    
-    files = [] # attachment
-    
-    def __init__(self):
-        pass
-    
-    def encrypt(self):
-        
-        ########################################################################
-        # Prototype code from http://code.activestate.com/recipes/52243/
-        # by Richard Jones
-        ########################################################################
-        #
-        # import sys, smtplib, MimeWriter, base64, StringIO
-        # 
-        # message = StringIO.StringIO()
-        # writer = MimeWriter.MimeWriter(message)
-        # writer.addheader('Subject', 'The kitten picture')
-        # writer.startmultipartbody('mixed')
-        # 
-        # # start off with a text/plain part
-        # part = writer.nextpart()
-        # body = part.startbody('text/plain')
-        # body.write('This is a picture of a kitten, enjoy :)')
-        # 
-        # # now add an image part
-        # part = writer.nextpart()
-        # part.addheader('Content-Transfer-Encoding', 'base64')
-        # body = part.startbody('image/jpeg')
-        # base64.encode(open('kitten.jpg', 'rb'), body)
-        # 
-        # # finish off
-        # writer.lastpart()
-        # 
-        # # send the mail
-        # smtp = smtplib.SMTP('smtp.server.address')
-        # smtp.sendmail('from@from.address', 'to@to.address', message.getvalue())
-        # smtp.quit()
-        #
-        ########################################################################
-        
-        # Assumes the message is ready for encryption
-        messageBuffer = StringIO.StringIO()
-        writer = MimeWriter.MimeWriter(messageBuffer)
-        writer.addheader('Subject', self.subject)
-        writer.startmultipartbody('mixed');
-        
-        # Starts with a default-content-type part
-        part = writer.nextpart()
-        if (len(self.HTMLMessageComponents) > 0):
-            body = part.startbody('text/html')
-            body.write('\n'.join(self.HTMLMessageComponents))
-        else:
-            body = part.startbody('text/html')
-            body.write('\n'.join(self.HTMLMessageComponents))
-        pass
-    
-    def decrypt(self, messageContent, receivedViaIMAP = False, overridingSubject = True):
-        self.locked = True
-        if receivedViaIMAP:
-            pass
-        else: # POP3 Message
-            self.data['response'] = messageContent[0]
-            self.data['OContent'] = messageContent[1] # Original Message
-            self.data['PContent'] = email.message_from_string('\n'.join(messageContent[1])) # Processed Message
-            self.data['size'] = int(messageContent[2])
-            
-            for PContentKey in self.data['PContent'].keys():
-                if self.headers.has_key(PContentKey.lower()):
-                    self.headers[PContentKey.lower()] += " %s" % value
-                else:
-                    self.headers[PContentKey.lower()] = "%s" % value
-            
-            if "subject" in self.headers.keys() and overridingSubject:
-                self.subject = self.headers['subject']
-            else:
-                self.subject = "Untitled Message"
-                
-            self.charset = "UTF-8"
-            
-            if self.data['PContent'].is_multipart():
-                # Assumes that this is a multipart message.
-                for mpart in self.data['PContent'].walk():
-                    mpartFilename = mpart.get_filename()
-                    mpartMainContentType = mpart.get_content_maintype()
-                    mpartSubContentType = mpart.get_content_subtype()
-                    # If the content type of this part is in the pattern multipart/*
-                    # or message/*, ignores this part.
-                    if mpartMainContentType in ['multipart', 'message']:
-                        continue
-                    
-                    self.dataBlocks.append(str(mpart.get_content_type()) + '; filename=' + str(mpart.get_filename()) + '; charset=' + str(mpart.get_content_charset()))
-                    
-                    if mpartMainContentType in ['text'] and not mpartFilename:
-                        localDecodedData = []
-                        # Extracts the data of this part
-                        if mpartSubContentType in ['plain', 'html']:
-                            localDecodedData.append(mpart.get_payload(decode = True))
-                            if not self.charset:
-                                self.charset = part.get_content_charset()
-                        if mpartSubContentType == 'plain':
-                            self.textMessageComponents.append(localDecodedData)
-                        elif mpartSubContentType == 'html':
-                            self.HTMLMessageComponents.append(localDecodedData)
-                    
-                    elif mpart.get_filename():
-                        self.files.append(mpart)
-            else:
-                localDecodedData = self.data['PContent'].get_payload()
-                self.textMessageComponents.append(localDecodedData)
-                self.HTMLMessageComponents.append(localDecodedData)
-        self.locked = False
-    
-    def attr(self, key = '', value = ''):
-        ableToSave = False
-        if key.strip() == 'from':
-            ableToSave = not value.strip() == '' and YotsubaSDKPackage.mail.validateEmailAddress(value.strip())
-        elif key.strip() == 'to' or key.strip() == 'cc' or key.strip() == 'bcc':
-            receivers = value.split(',')
-            for receiver in receivers:
-                if receiver.strip() == '':
-                    continue
-                if not YotsubaSDKPackage.mail.validateEmailAddress(receiver.strip()):
-                    ableToSave = False
-                    break
-        elif key.strip() == 'subject':
-            ableToSave = not value.strip() == defaultMessageSubject
-        else: # body
-            ableToSave = not value.strip() == ''
-        if ableToSave:
-            self.data[key] = value.strip()
-        return self.data[key]
-    def load(self, filename):
-        try:
-            return YotsubaSDKPackage.fs.read(filename, self, READ_PICKLE)
-        except:
-            return None
-        
-    def save(self, filename):
-        try:
-            return YotsubaSDKPackage.fs.write(filename, self, WRITE_PICKLE)
-        except:
-            return False
-
-
-# [Enabled packages]
+# [Enabled packages (not thread-safe)]
 # File System Interface
-fs      = YotsubaPackageFileSystemInterface()
+fs      = FileSystemInterface()
 # System Log
-syslog  = YotsubaPackageSystemLog()
+syslog  = SystemLog()
 # Kotoba, An XML Query Representative
-kotoba  = YotsubaPackageXML()
+kotoba  = XML()
 # Cryptographer
-crypt   = YotsubaPackageCryptographer()
-
+crypt   = Cryptographer()
 
 if __name__ == '__main__':
     #core.multiThreadTest();
