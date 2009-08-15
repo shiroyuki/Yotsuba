@@ -1,9 +1,13 @@
 #!/bin/sh
-
+echo
+echo "Creating Egg Package for Yotsuba"
+rm *.egg
 cp yotsuba.py egg-packer/yotsuba/__init__.py &&\
 svn export egg-packer temp &&\
 cd temp &&\
 python setup.py bdist_egg &&\
 mv dist/*.egg ../ &&\
 cd ../ &&\
-rm -Rf temp
+rm -Rf temp &&\
+echo "Python Egg Package for Yotsuba created" &&\
+echo
