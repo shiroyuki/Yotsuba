@@ -774,8 +774,7 @@ class XML(object):
         if not node.nodeType == node.ELEMENT_NODE:
             # Ignore non-element node
             return None
-        #try:
-        if True:
+        try:
             # Class-node instance of the parameter `node`
             treeNode = DOMElement(node, parentNode, level, levelIndex)
             if len(node.childNodes) > 0:
@@ -797,12 +796,12 @@ class XML(object):
                         return None
                 syslog.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), syslog.codeWatchLevel)
             return treeNode
-        #except:
+        except:
             syslog.report(
                 '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
                 syslog.errorLevel
             )
-            #return None
+            return None
     
     class selectorObject(object):
         SOName = None
