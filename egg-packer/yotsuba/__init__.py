@@ -58,13 +58,13 @@ class SystemLog:
         if level == self.errorLevel:
             self.hasError = True
         self.logs.append(self.LogObject(content, level))
-    def export(self, level = -1, onlyOneLevel = False, toArray = False):
+    def export(self, level = 0, onlyOneLevel = False, toArray = False):
         """
         Export logs as a hash table
         """
         table = []
         for log in self.logs:
-            if log.level < level:
+            if (onlyOneLevel and log.level != level) or (not onlyOneLevel and log.level < level):
                 continue
             textMessage = ''
             if log.level == self.noticeLevel:
@@ -159,7 +159,10 @@ class FileSystemInterface:
         return DIRECTORY
 
     def exists(self, destpath):
-        return    os.access(os.path.abspath(destpath), os.F_OK)
+        try:
+            return    os.path.isfile(os.path.abspath(destpath)) or os.path.isdir(os.path.abspath(destpath))
+        except:
+            return    False
 
     def readable(self, destpath):
         return    os.access(os.path.abspath(destpath), os.R_OK)
@@ -327,21 +330,26 @@ class XML(object):
             treeName = params[0]
         tree = None
         treeOrg = None
+        fileInterface = FileSystemInterface()
         syslog.report('sdk.xml.read')
         try:
             if type(source) == str:
-                if fs.exists(source):
+                syslog.report('sdk.xml.read: Type = String')
+                if fileInterface.exists(source):
+                    syslog.report('sdk.xml.read: Type = String + File')
                     treeOrg = xml.dom.minidom.parse(source)
                 else:
+                    syslog.report('sdk.xml.read: Type = String + Doc')
                     treeOrg = xml.dom.minidom.parseString(source)
             elif type(source) == DOMElement:
+                syslog.report('sdk.xml.read: Type = DOM')
                 tree = source
             else:
                 raise Exception("yotsuba.xml.read: Invalid input")
         except:
             syslog.report(
                 '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
-                sys.exc_info()[0],
+                sys.exc_info()[1],
                 syslog.errorLevel
             )
             return False
@@ -360,8 +368,7 @@ class XML(object):
                 syslog.errorLevel
             )
             return False
-        del treeOrg
-        return tree is not None
+        return treeOrg is not None and tree is not None
     
     def get(self, selector, useMultiThread = False):
         """
@@ -774,8 +781,7 @@ class XML(object):
         if not node.nodeType == node.ELEMENT_NODE:
             # Ignore non-element node
             return None
-        #try:
-        if True:
+        try:
             # Class-node instance of the parameter `node`
             treeNode = DOMElement(node, parentNode, level, levelIndex)
             if len(node.childNodes) > 0:
@@ -797,12 +803,12 @@ class XML(object):
                         return None
                 syslog.report('%d:%s > %d children constructed' % (level, treeNode.name(), len(treeNode.children)), syslog.codeWatchLevel)
             return treeNode
-        #except:
+        except:
             syslog.report(
                 '[sdk.xml.buildTreeOnTheFly] Node creation failed\n\t%s' % sys.exc_info()[0],
                 syslog.errorLevel
             )
-            #return None
+            return None
     
     class selectorObject(object):
         SOName = None
