@@ -58,13 +58,13 @@ class SystemLog:
         if level == self.errorLevel:
             self.hasError = True
         self.logs.append(self.LogObject(content, level))
-    def export(self, level = 0, onlyOneLevel = False, toArray = False):
+    def export(self, level = -1, onlyOneLevel = False, toArray = False):
         """
         Export logs as a hash table
         """
         table = []
         for log in self.logs:
-            if (onlyOneLevel and log.level != level) or (not onlyOneLevel and log.level < level):
+            if log.level < level:
                 continue
             textMessage = ''
             if log.level == self.noticeLevel:
@@ -159,10 +159,7 @@ class FileSystemInterface:
         return DIRECTORY
 
     def exists(self, destpath):
-        try:
-            return    os.path.isfile(os.path.abspath(destpath)) or os.path.isdir(os.path.abspath(destpath))
-        except:
-            return    False
+        return    os.path.exists(destpath)
 
     def readable(self, destpath):
         return    os.access(os.path.abspath(destpath), os.R_OK)
@@ -301,11 +298,6 @@ class XML(object):
         rule_generalSiblingCombinator
     ]
     defaultTreeName = 'defaultTree' # for the standalone mode
-    trees = {}
-    locks = {}
-    runningThreads = {}
-    exitedThreads = {}
-    sharedMemory = {}
     
     def __init__(self):
         """
@@ -314,7 +306,12 @@ class XML(object):
         
         This is a prototype.
         """
+        self.locks = {}
         self.locks['referencing'] = thread.allocate_lock()
+        self.trees = {}
+        self.runningThreads = {}
+        self.exitedThreads = {}
+        self.sharedMemory = {}
         #self.__type__ = "yotsuba"
     
     def read(self, *params):
@@ -330,26 +327,21 @@ class XML(object):
             treeName = params[0]
         tree = None
         treeOrg = None
-        fileInterface = FileSystemInterface()
         syslog.report('sdk.xml.read')
         try:
             if type(source) == str:
-                syslog.report('sdk.xml.read: Type = String')
-                if fileInterface.exists(source):
-                    syslog.report('sdk.xml.read: Type = String + File')
+                if fs.exists(source):
                     treeOrg = xml.dom.minidom.parse(source)
                 else:
-                    syslog.report('sdk.xml.read: Type = String + Doc')
                     treeOrg = xml.dom.minidom.parseString(source)
             elif type(source) == DOMElement:
-                syslog.report('sdk.xml.read: Type = DOM')
                 tree = source
             else:
                 raise Exception("yotsuba.xml.read: Invalid input")
         except:
             syslog.report(
                 '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
-                sys.exc_info()[1],
+                sys.exc_info()[0],
                 syslog.errorLevel
             )
             return False
@@ -368,7 +360,8 @@ class XML(object):
                 syslog.errorLevel
             )
             return False
-        return treeOrg is not None and tree is not None
+        del treeOrg
+        return tree is not None
     
     def get(self, selector, useMultiThread = False):
         """

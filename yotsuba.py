@@ -159,7 +159,7 @@ class FileSystemInterface:
         return DIRECTORY
 
     def exists(self, destpath):
-        return    os.access(os.path.abspath(destpath), os.F_OK)
+        return    os.path.exists(destpath)
 
     def readable(self, destpath):
         return    os.access(os.path.abspath(destpath), os.R_OK)
@@ -298,11 +298,6 @@ class XML(object):
         rule_generalSiblingCombinator
     ]
     defaultTreeName = 'defaultTree' # for the standalone mode
-    trees = {}
-    locks = {}
-    runningThreads = {}
-    exitedThreads = {}
-    sharedMemory = {}
     
     def __init__(self):
         """
@@ -311,7 +306,12 @@ class XML(object):
         
         This is a prototype.
         """
+        self.locks = {}
         self.locks['referencing'] = thread.allocate_lock()
+        self.trees = {}
+        self.runningThreads = {}
+        self.exitedThreads = {}
+        self.sharedMemory = {}
         #self.__type__ = "yotsuba"
     
     def read(self, *params):
