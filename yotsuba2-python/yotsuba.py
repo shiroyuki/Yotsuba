@@ -18,10 +18,10 @@ import smtplib
 import thread, threading
 
 PROJECT_TITLE = "Yotsuba"
-PROJECT_CODENAME = "Kotoba"
-PROJECT_MAJOR_VERSION = 2
+PROJECT_CODENAME = "Tori"
+PROJECT_MAJOR_VERSION = 3
 PROJECT_MINOR_VERSION = 0
-PROJECT_STATUS = "stable"
+PROJECT_STATUS = "Developmental"
 PROJECT_VERSION = "%d.%d (%s)" % (PROJECT_MAJOR_VERSION, PROJECT_MINOR_VERSION, PROJECT_STATUS)
 PROJECT_SIGNATURE = "%s/%s %s" % (PROJECT_TITLE, PROJECT_CODENAME, PROJECT_VERSION)
 
@@ -974,6 +974,8 @@ class Postman(object):
         postman = smtplib.SMTP(self.__server, self.__port)
         if self.__ssl:
             postman = smtplib.SMTP_SSL(self.__server, self.__port)
+        if self.__username is not None and self.__password:
+            postman.login(self__username, self.__password)
         for package in self.__packages:
             postman.sendmail(self.__from, package.destination, package.compile())
         postman.quit()
