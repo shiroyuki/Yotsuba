@@ -124,6 +124,7 @@ def testingProcedure():
         'root > c c2': 1,
         'root > * > * > common': 2,
         'root common': 4,
+        'root common, root common, root common': 4,
         'root * common': 4,
         'root *': 33,
         'root:root': 1,

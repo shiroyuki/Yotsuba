@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='yotsuba',
-    version='2.2',
+    version='2.3',
     description='Software Development Kit for new Python Developers',
     author='Juti Noppornpitak',
     author_email='juti_n@yahoo.co.jp',

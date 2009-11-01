@@ -1,2 +1,2 @@
 clear
-`pwd`/test.py
+python test.py

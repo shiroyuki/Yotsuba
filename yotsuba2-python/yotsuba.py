@@ -299,7 +299,7 @@ class XML(object):
     ]
     defaultTreeName = 'defaultTree' # for the standalone mode
     
-    def __init__(self):
+    def __init__(self, source = None):
         """
         This package is a breakthrough of XML parsers in Python using
         basic CSS3-selector method, instead of XPath.
@@ -312,6 +312,8 @@ class XML(object):
         self.runningThreads = {}
         self.exitedThreads = {}
         self.sharedMemory = {}
+        if source is not None:
+            self.read(source)
         #self.__type__ = "yotsuba"
     
     def read(self, *params):
@@ -363,15 +365,15 @@ class XML(object):
         del treeOrg
         return tree is not None
     
-    def get(self, selector, useMultiThread = False):
+    def get(self, selector, useMultiThread = False, maxDepth = None):
         """
         Get elements according to the supplied combination of CSS-3 selectors.
         This method is suitable for the standalone/default mode.
         """
         syslog.report("(Interface) Looking for [%s]" % selector)
-        return self.query(self.defaultTreeName, selector, useMultiThread)
+        return self.query(self.defaultTreeName, selector, useMultiThread, maxDepth)
     
-    def query(self, treeName, selector, useMultiThread = False):
+    def query(self, treeName, selector, useMultiThread = False, maxDepth = None):
         """
         Query for elements according to the supplied combination of CSS-3
         selectors. This method is suitable if there are multiple trees within
@@ -447,7 +449,7 @@ class XML(object):
                     self.runningThreads[selectorReference].append(query)
                     thread.start_new(self.queryWithOneSelector, (selectorReference, startupNode, query, True))
                 else:
-                    self.queryWithOneSelector(selectorReference, startupNode, query, False)
+                    self.queryWithOneSelector(selectorReference, startupNode, query, False, maxDepth = maxDepth)
         
         self.locks[selectorReference].acquire()
         resultList = self.sharedMemory[selectorReference]
@@ -467,7 +469,7 @@ class XML(object):
                 print "Removing referencing denied"
         return XMLQueriedNodes(resultList)
     
-    def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False):
+    def queryWithOneSelector(self, selectorReference, startupNode, query, useMultiThread = False, maxDepth = None):
         """
         Query for elements by a single combination of CSS-3 selectors. This is
         not meant to be used directly. Please use query(...) instead.
@@ -479,7 +481,7 @@ class XML(object):
             try:
                 syslog.report("Extending the shared memory")
                 self.sharedMemory[selectorReference].extend(
-                    self.traverse(startupNode, combination)
+                    self.traverse(startupNode, combination, maxDepth = maxDepth)
                 )
                 syslog.report("Extended the shared memory")
                 if useMultiThread:
@@ -506,7 +508,7 @@ class XML(object):
             )
         syslog.report("Stopped querying with one selector")
     
-    def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False):
+    def traverse(self, node, selector, selectorLevel = 0, poleNode = None, singleSiblingSearch = False, maxDepth = None):
         """
         Performs querying at the low level on the tree. This function is
         different from query() that it's querying based on each position.
@@ -518,6 +520,8 @@ class XML(object):
         See http://doc.shiroyuki.com/lib/Yotsuba_SDK_XML_Package#def_traverse.28node.2C_selector.2C_selectorLevel.2C_poleNode.2C_singleSiblingSearch.29
         for the description of parameters
         """
+        if maxDepth == 0:
+            return []
         try:
             syslog.report("Traverse [%d/%s:%d:%s]" % (node.level, node.name(), selectorLevel, ' '.join(selector)))
             rule = self.rule_descendantCombinator
@@ -647,19 +651,32 @@ class XML(object):
                     if singleSiblingSearch:
                         doSkip = True
                     # Adds the child node to the result list
-                    resultList.extend(self.traverse(cnode, selector, selectorLevel))
+                    if maxDepth is None:
+                        resultList.extend(self.traverse(cnode, selector, selectorLevel))
+                    else:
+                        resultList.extend(self.traverse(cnode, selector, selectorLevel, maxDepth = maxDepth - 1))
                 return resultList
             # Handles an adjacent sibling combinator (get one next sibling)
             elif rule == self.rule_adjacentSiblingCombinator:
-                resultList.extend(
-                    self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
-                )
+                if maxDepth is None:
+                    resultList.extend(
+                        self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True)
+                    )
+                else:
+                    resultList.extend(
+                        self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), True, maxDepth = maxDepth - 1)
+                    )
                 return resultList
             # Handles a general sibling combinator (get all next siblings)
             elif rule == self.rule_generalSiblingCombinator:
-                resultList.extend(
-                    self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
-                )
+                if maxDepth is None:
+                    resultList.extend(
+                        self.traverse(node.parent().parent(), selector, selectorLevel, node.parent())
+                    )
+                else:
+                    resultList.extend(
+                        self.traverse(node.parent().parent(), selector, selectorLevel, node.parent(), maxDepth = maxDepth - 1)
+                    )
                 return resultList
             # No rule applied
             else:
@@ -892,6 +909,9 @@ class DOMElement(object):
         q = XML()
         q.read(self)
         return q.get(selector)
+    
+    def __str__(self):
+        return self.hash
 
 class XMLQueriedNodes(object):
     elements = None
@@ -902,6 +922,7 @@ class XMLQueriedNodes(object):
             if element in self.elements:
                 continue
             self.elements.append(element)
+        self.elements = list(set(self.elements))
     
     def eq(self, indexNumber = None):
         try:
