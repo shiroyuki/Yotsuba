@@ -101,7 +101,7 @@ class Cryptographer:
     def serialise(self, dataObject):
         return cPickle.dumps(dataObject, pickle.HIGHEST_PROTOCOL)
 
-    def revertSerialise(self, serialisedData):
+    def deserialise(self, serialisedData):
         return cPickle.loads(serialisedData)
 
     def hash(self, text, hashPackage = None):
@@ -821,9 +821,9 @@ class XML(object):
             return None
     
     class selectorObject(object):
-        SOName = None
-        SOAttrs = None
-        SOFilters = None
+        #SOName = None
+        #SOAttrs = None
+        #SOFilters = None
         
         def __init__(self, name, attrs = {}, filters = []):
             self.SOName = name
@@ -850,11 +850,11 @@ class XML(object):
         def filter(self):
             return self.SOFilters
 class DOMElement(object):
-    level = 0
-    element = None
-    parentElement = None
-    hash = None
-    children = None
+    #level = 0
+    #element = None
+    #parentElement = None
+    #hash = None
+    #children = None
     
     def __init__(self, element, parent = None, level = 0, levelIndex = 0):
         self.level = level
@@ -914,7 +914,7 @@ class DOMElement(object):
         return self.hash
 
 class XMLQueriedNodes(object):
-    elements = None
+    #elements = None
     
     def __init__(self, elements = []):
         self.elements = []
@@ -924,12 +924,9 @@ class XMLQueriedNodes(object):
             self.elements.append(element)
         self.elements = list(set(self.elements))
     
-    def eq(self, indexNumber = None):
+    def eq(self, indexNumber):
         try:
-            if indexNumber is None:
-                return self.elements
-            else:
-                return self.elements[indexNumber]
+            return self.elements[indexNumber]
         except:
             return None
     
