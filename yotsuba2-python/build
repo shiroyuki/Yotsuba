@@ -4,7 +4,7 @@ echo "Creating Egg Package for Yotsuba"
 rm *.egg
 cp yotsuba.py egg-packer/yotsuba/__init__.py &&\
 svn export egg-packer yotsuba &&\
-tar -czf yotsuba-2.2-pkg.tar.gz yotsuba &&\
+tar -czf yotsuba-2.3.tar.gz yotsuba &&\
 cd yotsuba &&\
 python setup.py bdist_egg &&\
 mv dist/*.egg ../ &&\

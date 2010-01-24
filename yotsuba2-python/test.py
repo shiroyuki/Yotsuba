@@ -161,6 +161,8 @@ def testingProcedure():
         tEqual("The selector object construction (ID/Operator)", yotsuba.kotoba.makeSelectorObject(pqK).attr('id')[0], pqV[1])
         tEqual("The selector object construction (ID/Value)", yotsuba.kotoba.makeSelectorObject(pqK).attr('id')[1], pqV[2])
         tEqual("The selector object construction (Filters)", ''.join(yotsuba.kotoba.makeSelectorObject(pqK).filter()), pqV[3])
+    # data test
+    tEqual("Data test: data from a leaf node", yotsuba.kotoba.query('test', "l1").data(), "this is l1hello worldyahoowassupabcd")
 
 def testForStandaloneMode():
 

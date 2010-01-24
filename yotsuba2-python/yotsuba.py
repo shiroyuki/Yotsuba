@@ -18,10 +18,10 @@ import smtplib
 import thread, threading
 
 PROJECT_TITLE = "Yotsuba"
-PROJECT_CODENAME = "Tori"
-PROJECT_MAJOR_VERSION = 3
-PROJECT_MINOR_VERSION = 0
-PROJECT_STATUS = "Developmental"
+PROJECT_CODENAME = "Kotoba"
+PROJECT_MAJOR_VERSION = 2
+PROJECT_MINOR_VERSION = 3
+PROJECT_STATUS = "Stable"
 PROJECT_VERSION = "%d.%d (%s)" % (PROJECT_MAJOR_VERSION, PROJECT_MINOR_VERSION, PROJECT_STATUS)
 PROJECT_SIGNATURE = "%s/%s %s" % (PROJECT_TITLE, PROJECT_CODENAME, PROJECT_VERSION)
 
@@ -877,22 +877,19 @@ class DOMElement(object):
     
     def data(self):
         try:
-            if not self.element.hasChildNodes():
-                # Empty node
-                return ''
             resultData = []
             for dataNode in self.element.childNodes:
                 try:
                     if not dataNode.nodeType in (dataNode.TEXT_NODE, dataNode.CDATA_SECTION_NODE):
-                        # Ignore non-data node
-                        del resultData
-                        return ''
-                    resultData.append(dataNode.data)
+                        continue
+                    resultData.append(dataNode.data.strip())
                 except:
                     # Malform XML document
                     del resultData
                     return ''
-            return '\n'.join(resultData)
+            for child in self.children:
+                resultData += [child.data()]
+            return ''.join(resultData)
         except:
             return ''
     
