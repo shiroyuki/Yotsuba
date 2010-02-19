@@ -4,6 +4,8 @@ import re
 
 import cherrypy
 
+from yotsuba3.core import base
+
 # Disable Yotsuba 3's XML module until it is usable
 #from yotsuba3.lib.kotoba import Kotoba, DOMElement
 
@@ -11,27 +13,143 @@ import cherrypy
 import yotsuba
 Kotoba = yotsuba.XML
 
-defaultErrorTemplate = 'error.html'
 baseURI = ''
 basePath = ''
 path = {}
-errorTemplate = defaultErrorTemplate
+errorTemplate = None
 staticRouting = {}
 
 class WebFrameworkException(Exception):
     pass
 
-# Error pages
-def errorResponse(status, message, traceback, version):
-    substitutions = {
-        'code':    status,
-        'msg':     re.sub(" (u|r)?'", " ", re.sub("' ", " ", message))
-    }
-    return yotsuba.fs.read(os.path.join(path['template'], errorTemplate)) % substitutions
+class WebFrameworkErrorPage(object):
+    DEFAULT_TEMPLATE = """<!doctype html>
+        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+        <head>
+            <title>Tori</title>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+            <style type="text/css">
+                body {
+                    font-family: 'Helvetica', 'Arial';
+                    font-weight: normal;
+                    font-size: 16px;
+                    margin: 0;
+                    padding: 0;
+                    min-width: 720px;
+                }
+                
+                h1 {
+                    font-weight: normal;
+                    font-size: 24px;
+                    margin: 0;
+                    padding: 10px 20px;
+                    background-color: #000;
+                    color: #99cc00;
+                }
+                
+                h2 {
+                    font-weight: normal;
+                    font-size: 20px;
+                    margin: 0;
+                    padding: 10px 20px;
+                    background-color: #669900;
+                }
+                
+                h3 {
+                    border-top: 3px solid #000;
+                    font-weight: bold;
+                    margin: 10px 20px;
+                    padding: 5px 0;
+                }
+                
+                pre {
+                    white-space: pre-wrap;
+                    font-size: 12px;
+                    padding: 0;
+                    margin: 0;
+                }
+                
+                #ts {
+                    border: 1px solid #ffcc00;
+                    background-color: #ffffcc;
+                    padding: 10px;
+                    margin: 5px 20px;
+                    border-radius: 10px;
+                    -moz-border-radius: 10px;
+                    -webkit-border-radius: 10px;
+                }
+                
+                #footer {
+                    padding: 30px 20px;
+                    color: #999;
+                }
+                
+                table {
+                    margin: 5px 20px;
+                    display: block;
+                }
+                
+                th {
+                    color: #999;
+                    font-weight: normal;
+                    vertical-align: top;
+                    text-align: right;
+                    width: 100px;
+                    padding-top: 5px;
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    padding-bottom: 5px;
+                    border-right: 1px solid #ccc;
+                }
+                
+                td {
+                    vertical-align: top;
+                    padding-top: 5px;
+                    padding-left: 10px;
+                    padding-bottom: 5px;
+                }
+            </style>
+        </head>
+        <body>
+            <h1>Yotsuba Project</h1>
+            <h2>Tori Web Framework</h2>
+            <h3>Response</h3>
+            <table cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                    <th>Code</th>
+                    <td>HTTP %(code)s.</td>
+                </tr>
+                <tr>
+                    <th>Reason</th>
+                    <td>%(msg)s</td>
+                </tr>
+            </table>
+            <h3>Tracing Stack</h3>
+            <div id="ts">
+                <pre>%(tracingStack)s</pre>
+            </div>
+            <p id="footer">
+                &copy; 2009 Juti Noppornpitak (Shiroyuki Studio). All Rights
+                Reserved. %(version)s is licensed under LGPL and MIT.
+            </p>
+        </body>
+        </html>"""
+    
+    @staticmethod
+    def response(status, message, traceback, version):
+        """ Error Handler """
+        substitutions = {
+            'version':      base.getVersion(),
+            'code':         status,
+            'msg':          re.sub(" (u|r)?'", " ", re.sub("' ", " ", message)),
+            'tracingStack': cherrypy._cperror.format_exc()
+        }
+        template = errorTemplate is None and WebFrameworkErrorPage.DEFAULT_TEMPLATE or errorTemplate
+        return template % substitutions
 
 defaultConfig = {
-    'log.screen': False,                    # Disable trackback information
-    'error_page.default': errorResponse     # Use the custom error response from Tori
+    'log.screen':           False,                          # Disable trackback information
+    'error_page.default':   WebFrameworkErrorPage.response  # Use the custom error response from Tori
 }
 
 # Setup
@@ -52,7 +170,7 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
     baseURI = ''
     basePath = ''
     path = {}
-    errorTemplate = defaultErrorTemplate
+    errorTemplate = None
     staticRouting = {}
     
     # Get the reference to the calling function
@@ -120,7 +238,9 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
             }
         
         # Add custom error pages
-        errorTemplate = xmldoc.get('errorTemplate').data()
+        if xmldoc.get('errorTemplate').length() > 0:
+            errorTemplate = xmldoc.get('errorTemplate').data()
+            errorTemplate = yotsuba.fs.read(os.path.join(path['template'], errorTemplate))
     except:
         raise WebFrameworkException("Error while reading configuration from %s" % targetDestination)
     
@@ -144,9 +264,8 @@ class ContextContainer(object):
             rt += u' %s = %s' % (unicode(k), unicode(v))
         return rt
 
-def render(source, givenContext = None):
-    if givenContext is None:
-        givenContext = ContextContainer()
+def render(source, givenContext = None, **kwargs):
+    givenContext = givenContext is None and ContextContainer() or givenContext
     mylookup = TemplateLookup(
         directories = [path['template']],
         output_encoding = 'utf-8',
@@ -164,5 +283,5 @@ class BaseInterface(object):
         self.c = ContextContainer()
         pass
     
-    def render(self, source):
-        return render(source, self.c)
+    def render(self, source, **kwargs):
+        return render(source, self.c, **kwargs)
