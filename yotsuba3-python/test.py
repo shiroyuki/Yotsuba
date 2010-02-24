@@ -25,6 +25,29 @@ p(a = a)
 y(x, 1, 2)
 z(x, 1, 2)
 
+class Dummy(list):
+    def do(self):
+        return "hi"
+        
+    def getSelf(self):
+        return self
+    
+    def make(self):
+        return Dummy()
+    
+    def eq(self, i):
+        return self[i]
+
+obj1 = Dummy()
+obj1.x = 0
+obj2 = obj1.getSelf()
+print obj2.x
+obj2.y = 20
+print obj1.y
+print obj1.make().do()
+obj1.append(10)
+print obj1.eq(0)
+
 import time
 from Queue import Queue
 from threading import Thread

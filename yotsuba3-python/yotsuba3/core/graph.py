@@ -26,3 +26,6 @@ class Vertex(object):
     
     def isConnectedTo(self, otherVertex):
         return otherVertex in self.adjacents
+    
+    def __str__(self):
+        return u"%s %d" % (self.name, self.adjacents)

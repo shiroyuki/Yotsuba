@@ -1,5 +1,6 @@
 import os
 import codecs
+from xml.dom import minidom
 
 from yotsuba3.core import base
 from yotsuba3.core import graph
@@ -80,24 +81,61 @@ class DOMElements(graph.Graph):
         return returningData
 
 class DOMElement(graph.Vertex):
-    def __init__(self, name, attr = None, data = None, level = None, index = None, nextNode = None, children = None, reference = None):
+    def __init__(self, name, attr = None, level = None, index = None, parentNode = None, prevNode = None, nextNode = None, reference = None):
         super(graph.Vertex, self).__init__(name)
         self.__attr         = attr          is None and {}              or attr
-        self.__data         = data          is None and unicode()       or data
         self.__level        = level         is None and 0               or level
         self.__index        = index         is None and 0               or index
         self.__parentNode   = parentNode    is None and None            or parentNode
+        self.__prevNode     = prevNode      is None and None            or prevNode
         self.__nextNode     = nextNode      is None and None            or nextNode
-        self.__children     = children      is None and DOMElements()   or children
+        
+        # [Get adjacent vertices]
+        # Set up before getting adjacent vertices
+        childID = -1
+        childNodeBeforeCurrentNode = None
+        nodeIDs = range(self.element.childNodes) # this is still in ASC order.
+        reversedNodeIDs.reverse() # now it's in DESC order.
+        # Recursively get the adjacent vertices (data nodes and and child nodes)
+        for nodeID in reversedNodeIDs:
+            XMLNode = self.element.childNodes[nodeID]
+            newNode = None
+            if self.__isXMLDataNode(XMLNode):
+                # Make a data node.
+                newNode = DataElement(XMLNode.data)
+            else:
+                # Register the child node.
+                childID += 1
+                # Make a new DOM element.
+                newNode = DOMElement.make(XMLNode, self.__level + 1, childID, self, childNodeBeforeCurrentNode)
+                # If we know that there is a DOM node before this one, link this node back.
+                if childNodeBeforeCurrentNode is not None:
+                    childNodeBeforeCurrentNode.prev(newNode)
+                # Prepare for the earlier one.
+                childNodeBeforeCurrentNode = newNode
+            # Make a directional connection between nodes
+            self.makeEdgeTo(newNode)
+    
+    def __isXMLDataNode(self, XMLNode):
+        return XMLNode.nodeType in (XMLNode.TEXT_NODE, XMLNode.CDATA_SECTION_NODE)
     
     @staticmethod
-    def make(reference, data = None, level = None, index = None, nextNode  = None, children = None):
+    def make(reference, level = None, index = None, parentNode = None, nextNode  = None):
         attr = {}
         for key in reference.attributes.keys():
             attr[key] = reference.getAttribute(key)
-        return Vertex(reference.tagName, attr, data, level, index, nextNode, children, reference)
+        return Vertex(reference.tagName, attr, level, index, None, nextNode, reference)
     
-    def name(self, newName = None):
+    def getName(self):
+        '''
+        Get the name of the element
+        '''
+        return self.name
+    
+    def setName(self, newName):
+        '''
+        Set the name of the element
+        '''
         if type(newName) is str:
             self.name = newName
         return self.name
@@ -139,20 +177,44 @@ class DOMElement(graph.Vertex):
         '''
         Get data from the node.
         '''
-        returningData = self.__data
+        returningData = []
         maxDepth = 'maxDepth' in kwargs and (base.isNaturalNumber(maxDepth) and maxDepth - 1 or None) or None
-        if maxDepth is None or maxDepth > 0:
-            for childNode in self.__children:
+        for adjacentNode in self.adjacents:
+            if adjacentNode is DataElement:
+                returningData.append(DataElement.data)
+            elif adjacentNode is DOMElement and (maxDepth is None or maxDepth > 0):
                 # recursively get the data from the data node.
-                returningData += childNode.data(maxDepth)
-        return returningData
+                returningData.append(adjacentNode.data(maxDepth = maxDepth))
+        return ''.join(returningData)
     
     def children(self, query = None):
         '''
         Get the children of this node.
         '''
-        # set maxDepth to 1 to indicate that we are only interested in the children level.
+        children = []
+        # When there is no query, return all children
+        if query is None:
+            for adjacentNode in self.adjacents:
+                if adjacentNode is not DOMElement:
+                    continue
+                children.append(adjacentNode)
+        # Otherwise, look by the query. Set maxDepth to 1 to indicate that we are only interested in the children level.
         return query is None and self.__children or self.get(query, maxDepth = 1)
+    
+    def parent(self, newParentNode = None):
+        if type(newParentNode) is DOMElement:
+            self.__parentNode = newParentNode
+        return self.__parentNode
+    
+    def prev(self, newPrevNode = None):
+        if type(newPrevNode) is DOMElement:
+            self.__prevNode = newPrevNode
+        return self.__prevNode
+    
+    def next(self, newNextNode = None):
+        if type(newNextNode) is DOMElement:
+            self.__nextNode = newNextNode
+        return self.__nextNode
     
     def get(self, query, **kwargs):
         '''
@@ -161,6 +223,11 @@ class DOMElement(graph.Vertex):
         # set maxDepth to 1 to indicate that we are only interested in the children level.
         parser = Kotoba(self)
         return parser.get(query, **kwargs)
+
+class DataElement(graph.Vertex):
+    def __init__(self, dataString):
+        super(graph.Vertex, self).__init__("Yotsuba3.Kotoba.DataElement")
+        self.data = dataString
 
 class KotobaSourceException(Exception):
     pass
