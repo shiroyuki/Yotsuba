@@ -152,7 +152,12 @@ defaultConfig = {
     'error_page.default':   WebFrameworkErrorPage.response  # Use the custom error response from Tori
 }
 
-# Setup
+##################
+# Setup function #
+##################
+
+run = cherrypy.quickstart
+
 def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
     """
     Set up the environment
@@ -196,12 +201,18 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
         
         # Get the base URI
         baseURI = xmldoc.get('baseURI').data()
+        baseURI = baseURI.strip()
+        baseURI = re.sub("^/", "", baseURI)
+        baseURI = re.sub("/$", "", baseURI)
         
         # Prepare for routing
         # Note: All keys in staticRouting have to be ASCII.
         
         if not yotsuba.fs.exists(path['session']):
-            raise Exception("%s not found" % path['session'])
+            try:
+                yotsuba.fs.mkdir(path['session'])
+            except:
+                raise WebFrameworkException("%s not found" % path['session'])
         
         staticRouting[baseURI] = {
             'tools.sessions.on': True,
@@ -232,17 +243,20 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
             if __type == 'file' and __ref is not None:
                 __cKeyPath += 'name'
             
-            staticRouting[baseURI + __link] = {
+            staticRouting[baseURI + '/' + __link] = {
                 str(__cKeyFlag): True,
                 str(__cKeyPath): __ref
             }
-        
+    except:
+        raise WebFrameworkException("Error while reading configuration from %s" % targetDestination)
+    
+    try:
         # Add custom error pages
         if xmldoc.get('errorTemplate').length() > 0:
             errorTemplate = xmldoc.get('errorTemplate').data()
             errorTemplate = yotsuba.fs.read(os.path.join(path['template'], errorTemplate))
     except:
-        raise WebFrameworkException("Error while reading configuration from %s" % targetDestination)
+        raise WebFrameworkException("Error while setting up a custom error error page.")
     
     if not enableDebuggingMode:
         cherrypy.config.update(defaultConfig)
@@ -272,7 +286,7 @@ def render(source, givenContext = None, **kwargs):
         encoding_errors = 'replace'
     )
     mytemplate = mylookup.get_template(source)
-    return mytemplate.render(c = givenContext)
+    return mytemplate.render(baseURI = baseURI, c = givenContext, **kwargs)
 
 ##################
 # Base Interface #
