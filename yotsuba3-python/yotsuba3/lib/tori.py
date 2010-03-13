@@ -13,170 +13,78 @@ from yotsuba3.core import base
 import yotsuba
 Kotoba = yotsuba.XML
 
+mode = ''
 baseURI = ''
 basePath = ''
 path = {}
 errorTemplate = None
 staticRouting = {}
-
-class WebFrameworkException(Exception):
-    pass
-
-class WebFrameworkErrorPage(object):
-    DEFAULT_TEMPLATE = """<!doctype html>
-        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
-        <head>
-            <title>Tori</title>
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-            <style type="text/css">
-                body {
-                    font-family: 'Helvetica', 'Arial';
-                    font-weight: normal;
-                    font-size: 16px;
-                    margin: 0;
-                    padding: 0;
-                    min-width: 720px;
-                }
-                
-                h1 {
-                    font-weight: normal;
-                    font-size: 24px;
-                    margin: 0;
-                    padding: 10px 20px;
-                    background-color: #000;
-                    color: #99cc00;
-                }
-                
-                h2 {
-                    font-weight: normal;
-                    font-size: 20px;
-                    margin: 0;
-                    padding: 10px 20px;
-                    background-color: #669900;
-                }
-                
-                h3 {
-                    border-top: 3px solid #000;
-                    font-weight: bold;
-                    margin: 10px 20px;
-                    padding: 5px 0;
-                }
-                
-                pre {
-                    white-space: pre-wrap;
-                    font-size: 12px;
-                    padding: 0;
-                    margin: 0;
-                }
-                
-                #ts {
-                    border: 1px solid #ffcc00;
-                    background-color: #ffffcc;
-                    padding: 10px;
-                    margin: 5px 20px;
-                    border-radius: 10px;
-                    -moz-border-radius: 10px;
-                    -webkit-border-radius: 10px;
-                }
-                
-                #footer {
-                    padding: 30px 20px;
-                    color: #999;
-                }
-                
-                table {
-                    margin: 5px 20px;
-                    display: block;
-                }
-                
-                th {
-                    color: #999;
-                    font-weight: normal;
-                    vertical-align: top;
-                    text-align: right;
-                    width: 100px;
-                    padding-top: 5px;
-                    padding-left: 10px;
-                    padding-right: 10px;
-                    padding-bottom: 5px;
-                    border-right: 1px solid #ccc;
-                }
-                
-                td {
-                    vertical-align: top;
-                    padding-top: 5px;
-                    padding-left: 10px;
-                    padding-bottom: 5px;
-                }
-            </style>
-        </head>
-        <body>
-            <h1>Yotsuba Project</h1>
-            <h2>Tori Web Framework</h2>
-            <h3>Response</h3>
-            <table cellpadding="0" cellspacing="0" border="0">
-                <tr>
-                    <th>Code</th>
-                    <td>HTTP %(code)s.</td>
-                </tr>
-                <tr>
-                    <th>Reason</th>
-                    <td>%(msg)s</td>
-                </tr>
-            </table>
-            <h3>Tracing Stack</h3>
-            <div id="ts">
-                <pre>%(tracingStack)s</pre>
-            </div>
-            <p id="footer">
-                &copy; 2009 Juti Noppornpitak (Shiroyuki Studio). All Rights
-                Reserved. %(version)s is licensed under LGPL and MIT.
-            </p>
-        </body>
-        </html>"""
-    
-    @staticmethod
-    def response(status, message, traceback, version):
-        """ Error Handler """
-        substitutions = {
-            'version':      base.getVersion(),
-            'code':         status,
-            'msg':          re.sub(" (u|r)?'", " ", re.sub("' ", " ", message)),
-            'tracingStack': cherrypy._cperror.format_exc()
-        }
-        template = errorTemplate is None and WebFrameworkErrorPage.DEFAULT_TEMPLATE or errorTemplate
-        return template % substitutions
-
-defaultConfig = {
-    'log.screen':           False,                          # Disable trackback information
-    'error_page.default':   WebFrameworkErrorPage.response  # Use the custom error response from Tori
-}
+defaultConfig = {}
+settings = {}
 
 ##################
 # Setup function #
 ##################
 
-run = cherrypy.quickstart
+class serverInterface(object):
+    @staticmethod
+    def standalone(*largs, **kwargs):
+        cherrypy.quickstart(*largs, **kwargs)
+    
+    @staticmethod
+    def application(*largs, **kwargs):
+        '''
+        Run as a WSGI application
+        '''
+        cherrypy.config.update({
+            'environment': 'embedded'
+        })
+        application = cherrypy.Application(*largs, **kwargs)
+        application.merge(staticRouting)
+        return application
+    
+    @staticmethod
+    def auto(*largs, **kwargs):
+        '''
+        Run in auto mode. This is vary, depending on the configuration.
+        '''
+        application = None
+        if mode == "application":
+            application = serverInterface.application(*largs, **kwargs)
+        else:
+            serverInterface.standalone(*largs, **kwargs)
+        return application
 
 def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
     """
     Set up the environment
     """
     
+    global mode
     global baseURI
     global basePath
     global path
     global errorTemplate
     global staticRouting
     global defaultConfig
+    global settings
     
     # Initialization
     __baseConfigKey = 'tools.static'
+    mode = 'local'
     baseURI = ''
     basePath = ''
     path = {}
     errorTemplate = None
     staticRouting = {}
+    defaultConfig = {
+        'tools.decode.on':      True,
+        'tools.encode.on':      True,
+        'tools.gzip.on':        True,
+        'log.screen':           False,                          # Disable trackback information
+        'error_page.default':   DefaultErrorPage.response       # Use the custom error response from Tori
+    }
+    settings = {}
     
     # Get the reference to the calling function
     f = sys._getframe(1)
@@ -187,32 +95,32 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
     basePath = os.path.abspath(os.path.dirname(os.path.abspath(referenceToCaller)))
     
     # Get the location of the given the configuration files
-    targetDestination = "%s/%s" % (basePath, setupFilename)
+    targetDestination = setupFilename
+    if not re.search('^/', setupFilename):
+        targetDestination = "%s/%s" % (basePath, setupFilename)
     
     try:
         # Load the configuration files
         xmldoc = Kotoba(targetDestination)
         
-        # Store the basic paths
+        # Get operational mode
+        xmlOnMode = xmldoc.get("mode")
+        if xmlOnMode.length > 0:
+            mode = xmlOnMode.data()
+        
+        # Store the basic paths in the memory. Make the directory for the destination if necessary.
         pathIndices = xmldoc.get('basepath *')
         pathIndices = pathIndices.list() # [Legacy] the way to get the list of node in Yotsuba 2
         for pathIndex in pathIndices:
-            path[pathIndex.name()] = os.path.join(basePath, pathIndex.data())
+            pathName = pathIndex.name()
+            path[pathName] = os.path.join(basePath, pathIndex.data())
+            makeDirectoryIfNotExist(path[pathName])
         
         # Get the base URI
         baseURI = xmldoc.get('baseURI').data()
         baseURI = baseURI.strip()
         baseURI = re.sub("^/", "", baseURI)
         baseURI = re.sub("/$", "", baseURI)
-        
-        # Prepare for routing
-        # Note: All keys in staticRouting have to be ASCII.
-        
-        if not yotsuba.fs.exists(path['session']):
-            try:
-                yotsuba.fs.mkdir(path['session'])
-            except:
-                raise WebFrameworkException("%s not found" % path['session'])
         
         staticRouting[baseURI] = {
             'tools.sessions.on': True,
@@ -247,6 +155,29 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
                 str(__cKeyFlag): True,
                 str(__cKeyPath): __ref
             }
+        
+        # Get application settings
+        xmlOnSettings = xmldoc.get("settings option")
+        if xmlOnSettings.length > 0:
+            for option in xmlOnSettings.list():
+                optionData = option.data()
+                
+                optionDataAsFloatingNumber = base.convertToFloatingNumber(optionData)
+                optionDataAsInteger = base.convertToInteger(optionData)
+                optionDataAsBoolean = base.convertToBoolean(optionData)
+                
+                if re.match("^\d+(\.\d+)?$", optionData):
+                    if optionDataAsFloatingNumber is not None:
+                        # the option data is integer-convertible.
+                        optionData = optionDataAsFloatingNumber
+                    elif optionDataAsInteger is not None:
+                        # the option data is integer-convertible.
+                        optionData = optionDataAsInteger
+                elif optionDataAsBoolean is not None:
+                    # the option data is boolean-convertible.
+                    optionData = optionDataAsBoolean
+                
+                settings[option.attr('name')] = optionData
     except:
         raise WebFrameworkException("Error while reading configuration from %s" % targetDestination)
     
@@ -271,31 +202,185 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
 from mako.template import Template
 from mako.lookup import TemplateLookup
 
-class ContextContainer(object):
-    def __str__(self):
-        rt = 'ContextContainer:'
-        for k, v in self.__dict__.iteritems():
-            rt += u' %s = %s' % (unicode(k), unicode(v))
-        return rt
-
-def render(source, givenContext = None, **kwargs):
-    givenContext = givenContext is None and ContextContainer() or givenContext
+def render(source, **kwargs):
     mylookup = TemplateLookup(
         directories = [path['template']],
         output_encoding = 'utf-8',
         encoding_errors = 'replace'
     )
     mytemplate = mylookup.get_template(source)
-    return mytemplate.render(baseURI = baseURI, c = givenContext, **kwargs)
+    output = mytemplate.render(baseURI = baseURI, **kwargs)
+    if 'HTMLMinification' in settings and settings['HTMLMinification']:
+        output = re.sub("^( |\t)+", "\n", output)
+        output = re.sub("( |\t)+$", "\n", output)
+        output = re.sub("\n( |\t)+", '\n', output)
+        output = re.sub("\n+", "\n", output)
+        output = re.sub("\n", "==========", output)
+        output = re.sub("\s+", " ", output)
+        output = re.sub("==========", "\n", output)
+        output = re.sub("\n/", "/", output)
+        output = re.sub(" ?\*/\s+", "*/", output)
+        output = re.sub(";\n", ";", output)
+        output = re.sub(",\n", ",", output)
+        output = re.sub(">\n", ">", output)
+        output = re.sub("\)\s+\{\n*", "){", output)
+        output = re.sub("\}\n", "}", output)
+        output = output.strip()
+    return output
 
-##################
-# Base Interface #
-##################
+#############
+# Exception #
+#############
+
+class WebFrameworkException(Exception):
+    pass
+
+####################
+# Basic Interfaces #
+####################
 
 class BaseInterface(object):
-    def __init__(self):
-        self.c = ContextContainer()
-        pass
+    '''
+    Base (Web) interface providing basic functionality for rendering template.
+    '''
+    def method(self):
+        return cherrypy.request.method
+    
+    def isGET(self):
+        return self.method() == "GET"
+    
+    def isPOST(self):
+        return self.method() == "POST"
+    
+    def isDELETE(self):
+        return self.method() == "DELETE"
+    
+    def isPUT(self):
+        return self.method() == "PUT"
+    
+    def isAuth(self):
+        '''
+        Check if the user is authenticated.
+        '''
+        return True
+    
+    def isAdmin(self):
+        '''
+        Check if the user is an administrator.
+        '''
+        return True
     
     def render(self, source, **kwargs):
-        return render(source, self.c, **kwargs)
+        return render(source, **kwargs)
+    
+    def customResponse(self, code, message = None):
+        cherrypy.response.status = code
+        if message is not None:
+            cherrypy.response.body = [message]
+    
+    def response(self, code, message = None):
+        if base.isString(message) and len(message) > 0:
+            raise cherrypy.HTTPError(code, message)
+        else:
+            raise cherrypy.HTTPError(code)
+    
+    def redirect(self, url, code = None):
+        if base.isIntegerNumber(code):
+            raise cherrypy.HTTPRedirect(url, code)
+        else:
+            raise cherrypy.HTTPRedirect(url)
+
+class UserInterface(object):
+    TEMPLATE = """<!doctype html>
+        <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+        <head>
+            <title>Tori Web Framework - Project Yotsuba</title>
+            <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+            <style type="text/css">
+                body    { font-family: 'Helvetica', 'Arial'; font-weight: normal; font-size: 16px; margin: 0; padding: 0; min-width: 720px; }
+                h1      { font-weight: normal; font-size: 24px; margin: 0; padding: 10px 20px; background-color: #000; color: #99cc00; }
+                h2      { font-weight: normal; font-size: 20px; margin: 0; padding: 10px 20px; background-color: #669900; color: #ffffff; }
+                h3      { border-top: 3px solid #000; font-weight: bold; margin: 10px 0px; padding: 5px 0; }
+                pre     { white-space: pre-wrap; font-size: 12px; padding: 0; margin: 0; }
+                table   { margin: 5px 20px; display: block; }
+                table.vertical th { color: #999; font-weight: normal; vertical-align: top; text-align: right; width: 200px; padding-top: 5px; padding-left: 10px; padding-right: 10px; padding-bottom: 5px; border-right: 1px solid #ccc; }
+                table.vertical td { vertical-align: top; padding-top: 5px; padding-left: 10px; padding-bottom: 5px; }
+                #response {margin: 20px;}
+                #footer { padding: 30px 20px; color: #999; }
+            </style>
+        </head>
+        <body>
+            <h1>Yotsuba Project</h1>
+            <h2>Tori Web Framework</h2>
+            <div id="response">
+            <!-- Custom Content -->
+            %(response)s
+            <!-- Custom Content -->
+            </div>
+            <p id="footer">
+                &copy; 2009 Juti Noppornpitak (Shiroyuki Studio). All Rights
+                Reserved. %(version)s is licensed under LGPL and MIT.
+            </p>
+        </body>
+        </html>"""
+    
+    @staticmethod
+    def response(responseContent):
+        substitutions = {
+            'version':      base.getVersion(),
+            'response':     responseContent
+        }
+        return UserInterface.TEMPLATE % substitutions
+
+class DefaultErrorPage(object):
+    DEFAULT_TEMPLATE = """
+        <style type="text/css">
+            #ts     { border: 1px solid #ffcc00; background-color: #ffffcc; padding: 10px; border-radius: 10px; -moz-border-radius: 10px; -webkit-border-radius: 10px; }
+            
+        </style>
+        <h3>Response</h3>
+        <table cellpadding="0" cellspacing="0" border="0" class="vertical">
+            <tr>
+                <th>Code</th>
+                <td>HTTP %(code)s.</td>
+            </tr>
+            <tr>
+                <th>Reason</th>
+                <td>%(msg)s</td>
+            </tr>
+        </table>
+        <h3>Tracing Stack</h3>
+        <div id="ts">
+            <pre>%(tracingStack)s</pre>
+        </div>
+    """
+    
+    @staticmethod
+    def response(status, message, traceback, version):
+        """ Error Handler """
+        substitutions = {
+            'code':         status,
+            'msg':          re.sub(" (u|r)?'", " ", re.sub("' ", " ", message)),
+            'tracingStack': cherrypy._cperror.format_exc()
+        }
+        
+        responseContent = None
+        
+        # If the error template is not specified, use the default one.
+        if errorTemplate is None:
+            responseContent = DefaultErrorPage.DEFAULT_TEMPLATE % substitutions
+            responseContent = UserInterface.response(responseContent)
+        else:
+            responseContent = errorTemplate % substitutions
+        return responseContent
+
+#############
+# Utilities #
+#############
+
+def makeDirectoryIfNotExist(destination):
+    if not yotsuba.fs.exists(destination):
+        try:
+            yotsuba.fs.mkdir(destination)
+        except:
+            raise WebFrameworkException("%s not found" % destination)

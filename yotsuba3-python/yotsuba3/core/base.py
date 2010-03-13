@@ -1,4 +1,6 @@
-CORE_VERSION = 3.0
+import re
+
+CORE_VERSION = 2.9
 
 def getVersion():
     return u"Yotsuba %s" % CORE_VERSION
@@ -22,3 +24,22 @@ def isIntegerNumber(objRef):
 
 def isNaturalNumber(objRef):
     return inIntegerNumber(objRef) and objRef >= 0
+
+def convertToInteger(objRef):
+    try:
+        return int(objRef)
+    except:
+        return None
+
+def convertToFloatingNumber(objRef):
+    try:
+        return float(objRef)
+    except:
+        return None
+
+def convertToBoolean(objRef):
+    convertible = isString(objRef) and re.match("^(true|false)$", objRef, re.I)
+    result = None
+    if convertible:
+        result = re.search("^true$", objRef, re.I) is not None
+    return result
