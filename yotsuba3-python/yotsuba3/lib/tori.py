@@ -122,11 +122,12 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
         baseURI = re.sub("^/", "", baseURI)
         baseURI = re.sub("/$", "", baseURI)
         
-        staticRouting[baseURI] = {
+        staticRouting[baseURI + "/"] = {
             'tools.sessions.on': True,
             'tools.sessions.timeout': 10,
             'tools.sessions.storage_type': 'file',
-            'tools.sessions.storage_path': path['session']
+            'tools.sessions.storage_path': path['session'],
+            'tools.staticdir.root':        path['static']
         }
         
         xmldocOnStaticRouting = xmldoc.get('staticRouting file, staticRouting dir')
@@ -145,8 +146,6 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
             __cBaseKey = "%s%s" % (__baseConfigKey, __type)
             __cKeyFlag = "%s.on" % (__cBaseKey)
             __cKeyPath = "%s.%s" % (__cBaseKey, __type)
-            
-            __ref = os.path.join(path['static'], __ref)
             
             if __type == 'file' and __ref is not None:
                 __cKeyPath += 'name'

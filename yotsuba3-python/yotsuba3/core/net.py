@@ -1,4 +1,7 @@
-import urllib2
+try:
+    from httplib2 import Http
+except:
+    raise Exception("Required module httplib2 not found")
 
 LOAD_GAE = False
 
@@ -14,7 +17,8 @@ class http(object):
     DEFAULT_QUERYSTRING = u''
     
     @staticmethod
-    def get(url, data = None, headers = None):
+    def get(url, data = None, headers = None, cacheLocation = None):
+        
         # Set the optional parameters
         data = data is None and {} or data
         headers = headers is None and {} or headers
@@ -33,13 +37,8 @@ class http(object):
             raw_response = urlfetch.fetch(url)
             response = raw_response.content
         else:
-            # Prepare the request
-            req = urllib2.Request(url)
-            if headers is dict:
-                for k, v in headers.iteritems():
-                    req.add_header(k, v)
-            raw_response = urllib2.urlopen(req)
-            response = raw_response.read()
+            req = Http()
+            response = req.request(url)[1]
             
             # free memory
             del req
