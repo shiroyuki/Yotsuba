@@ -1,6 +1,7 @@
 import re
 
 CORE_VERSION = 2.9
+REPO_TYPE = "git"
 
 def getVersion():
     return u"Yotsuba %s" % CORE_VERSION
