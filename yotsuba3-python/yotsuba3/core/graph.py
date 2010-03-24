@@ -12,6 +12,10 @@ class Graph(list):
         graph. (Make a connected-or-not-connected subgraph from it.)
         '''
         return Graph()
+    
+    @staticmethod
+    def isInstance(objRef):
+        return type(objRef) is Graph
 
 class Vertex(object):
     DEFAULT_EDGE_WEIGHT             = 0
@@ -19,7 +23,9 @@ class Vertex(object):
     
     def __init__(self, name, adjacents = None):
         self.name       = name
-        self.adjacents  = adjacents is None and Graph() or adjacents
+        self.adjacents  = adjacents
+        if self.adjacents is None:
+            self.adjacents = Graph()
     
     def makeEdgeTo(self, vertex):
         self.adjacents.append(vertex)
@@ -28,4 +34,8 @@ class Vertex(object):
         return otherVertex in self.adjacents
     
     def __str__(self):
-        return u"%s %d" % (self.name, self.adjacents)
+        return u"%s %d" % (self.name, len(self.adjacents))
+    
+    @staticmethod
+    def isInstance(objRef):
+        return type(objRef) is Vertex

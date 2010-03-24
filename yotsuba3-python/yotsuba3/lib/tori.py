@@ -184,7 +184,10 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
         # Add custom error pages
         if xmldoc.get('errorTemplate').length() > 0:
             errorTemplate = xmldoc.get('errorTemplate').data()
-            errorTemplate = yotsuba.fs.read(os.path.join(path['template'], errorTemplate))
+            if xmldoc.get('errorTemplate').eq(0).attr('use') == 'mako':
+                pass
+            else:
+                errorTemplate = yotsuba.fs.read(os.path.join(path['template'], errorTemplate))
     except:
         raise WebFrameworkException("Error while setting up a custom error error page.")
     
@@ -200,6 +203,7 @@ def setup(setupFilename, enableDebuggingMode = False, additionalConfig = None):
 
 from mako.template import Template
 from mako.lookup import TemplateLookup
+from mako.exceptions import html_error_template
 
 def render(source, **kwargs):
     mylookup = TemplateLookup(
@@ -207,12 +211,18 @@ def render(source, **kwargs):
         output_encoding = 'utf-8',
         encoding_errors = 'replace'
     )
-    mytemplate = mylookup.get_template(source)
-    output = mytemplate.render(baseURI = baseURI, **kwargs)
+    output = ''
+    
+    try:
+        mytemplate = mylookup.get_template(source)
+        output = mytemplate.render(baseURI = baseURI, **kwargs)
+    except:
+        raise Exception(html_error_template().render())
+    
     if 'HTMLMinification' in settings and settings['HTMLMinification']:
-        output = re.sub("^( |\t)+", "\n", output)
-        output = re.sub("( |\t)+$", "\n", output)
-        output = re.sub("\n( |\t)+", '\n', output)
+        output = re.sub("^( |\t)+", " ", output)
+        output = re.sub("( |\t)+$", " ", output)
+        output = re.sub("\n( |\t)+", ' ', output)
         output = re.sub("\n+", "\n", output)
         output = re.sub("\n", "==========", output)
         output = re.sub("\s+", " ", output)
@@ -370,7 +380,7 @@ class DefaultErrorPage(object):
             responseContent = DefaultErrorPage.DEFAULT_TEMPLATE % substitutions
             responseContent = UserInterface.response(responseContent)
         else:
-            responseContent = errorTemplate % substitutions
+            responseContent = render(errorTemplate, **substitutions)
         return responseContent
 
 #############

@@ -8,6 +8,9 @@ def getVersion():
 
 # Utilities
 
+def isList(objRef):
+    return type(objRef) is list
+
 def isString(objRef):
     return type(objRef) in [unicode, str]
 
