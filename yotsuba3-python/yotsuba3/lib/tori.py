@@ -206,20 +206,38 @@ from mako.lookup import TemplateLookup
 from mako.exceptions import html_error_template
 
 def render(source, **kwargs):
-    mylookup = TemplateLookup(
-        directories = [path['template']],
-        output_encoding = 'utf-8',
-        encoding_errors = 'replace'
-    )
+    # Local flags
+    flag_HTMLMinification = "HTMLMinification"
+    
+    # Switches
+    enable_HTMLMinification = kwargs[flag_HTMLMinification] if flag_HTMLMinification in kwargs else (flag_HTMLMinification in settings and settings[flag_HTMLMinification])
+    
+    # Local variables
+    makoTemplate = None
+    makoOptions = {
+        'output_encoding': 'utf-8',
+        'encoding_errors': 'replace'
+    }
+    
+    # Default output
     output = ''
     
+    # Render with Mako
+    if os.path.exists(source):
+        makoTemplate = Template(filename = source, **makoOptions)
+    elif os.path.exists(os.path.join(path['template'], source)):
+        makoLookup = TemplateLookup(directories = [path['template']], **makoOptions)
+        makoTemplate = makoLookup.get_template(source)
+    else:
+        makoTemplate = Template(source, **makoOptions)
+    
     try:
-        mytemplate = mylookup.get_template(source)
-        output = mytemplate.render(baseURI = baseURI, **kwargs)
+        output = makoTemplate.render(baseURI = baseURI, **kwargs)
     except:
         raise Exception(html_error_template().render())
     
-    if 'HTMLMinification' in settings and settings['HTMLMinification']:
+    # HTML Minification
+    if enable_HTMLMinification and not re.search('<(pre|code)', output):
         output = re.sub("^( |\t)+", " ", output)
         output = re.sub("( |\t)+$", " ", output)
         output = re.sub("\n( |\t)+", ' ', output)
@@ -235,6 +253,7 @@ def render(source, **kwargs):
         output = re.sub("\)\s+\{\n*", "){", output)
         output = re.sub("\}\n", "}", output)
         output = output.strip()
+    
     return output
 
 #############

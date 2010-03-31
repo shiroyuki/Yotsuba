@@ -11,6 +11,9 @@ def getVersion():
 def isList(objRef):
     return type(objRef) is list
 
+def isTuple(objRef):
+    return type(objRef) is tuple
+
 def isString(objRef):
     return type(objRef) in [unicode, str]
 
