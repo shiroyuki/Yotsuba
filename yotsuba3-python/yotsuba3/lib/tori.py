@@ -299,7 +299,7 @@ class BaseInterface(object):
         return True
     
     def render(self, source, **kwargs):
-        return render(source, **kwargs)
+        return render(source, baseURI = baseURI, **kwargs)
     
     def customResponse(self, code, message = None):
         cherrypy.response.status = code
