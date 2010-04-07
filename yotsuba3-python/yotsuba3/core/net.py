@@ -1,8 +1,3 @@
-try:
-    from httplib2 import Http
-except:
-    raise Exception("Required module httplib2 not found")
-
 LOAD_GAE = False
 
 try:
@@ -10,6 +5,12 @@ try:
     LOAD_GAE = True
 except:
     pass
+
+if not LOAD_GAE:
+    try:
+        from httplib2 import Http
+    except:
+        raise Exception("Required module httplib2 not found")
 
 from yotsuba3.core import base
 

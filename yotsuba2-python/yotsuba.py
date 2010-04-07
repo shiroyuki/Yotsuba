@@ -13,6 +13,7 @@ import base64
 import xml.dom.minidom
 import cPickle
 import smtplib
+import codecs
 
 # For experimental features
 import thread, threading
@@ -231,7 +232,7 @@ class FileSystemInterface:
         # This part does not use pickle.
         if not self.isfile(filename):
             return None
-        data = open(filename, mode).read()
+        data = codecs.open(filename, mode).read()
         return data
 
     # Web Data Fetching Function
@@ -263,7 +264,7 @@ class FileSystemInterface:
         if self.isfile(filename):
             os.unlink(filename)
         try:
-            fp = open(filename, mode)
+            fp = codecs.open(filename, mode)
             fp.write(data)
             fp.close()
         except:
@@ -330,6 +331,7 @@ class XML(object):
         tree = None
         treeOrg = None
         syslog.report('sdk.xml.read')
+        #if True:
         try:
             if type(source) == str:
                 if fs.exists(source):
@@ -340,6 +342,7 @@ class XML(object):
                 tree = source
             else:
                 raise Exception("yotsuba.xml.read: Invalid input")
+        #else:
         except:
             syslog.report(
                 '[sdk.xml.read] the parameter `source` is neither an existed filename nor a valid XML-formatted string. This original message is:\n\t%s' %
