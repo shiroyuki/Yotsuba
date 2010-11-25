@@ -1,0 +1,29 @@
+K 25
+svn:wc:ra_dav:version-url
+V 52
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/test
+END
+core_mt.py
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/test/core_mt.py
+END
+core_net.py
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/test/core_net.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 64
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/test/__init__.py
+END
+lib_kotoba.py
+K 25
+svn:wc:ra_dav:version-url
+V 66
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/test/lib_kotoba.py
+END

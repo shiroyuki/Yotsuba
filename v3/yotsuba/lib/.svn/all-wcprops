@@ -1,0 +1,35 @@
+K 25
+svn:wc:ra_dav:version-url
+V 51
+/svn/!svn/ver/145/trunk/yotsuba3-python/yotsuba/lib
+END
+aria.py
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/142/trunk/yotsuba3-python/yotsuba/lib/aria.py
+END
+tori.py
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/145/trunk/yotsuba3-python/yotsuba/lib/tori.py
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/lib/__init__.py
+END
+kotoba.py
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/145/trunk/yotsuba3-python/yotsuba/lib/kotoba.py
+END
+enigma.py
+K 25
+svn:wc:ra_dav:version-url
+V 61
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/lib/enigma.py
+END

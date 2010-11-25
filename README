@@ -1,0 +1,5 @@
+GIT repository for Yotsuba
+
+v2/     contains Yotsuba 2.3 (becoming a legacy version as 2011.01.13)
+v3/     contains Yotsuba 3.0 (currently only for stable version)
+c/      contains Yotsuba for C/C++/Objective-C (experimental project)

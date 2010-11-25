@@ -1,0 +1,23 @@
+K 25
+svn:wc:ra_dav:version-url
+V 47
+/svn/!svn/ver/145/trunk/yotsuba3-python/yotsuba
+END
+license_gpl.txt
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/127/trunk/yotsuba3-python/yotsuba/license_gpl.txt
+END
+__init__.py
+K 25
+svn:wc:ra_dav:version-url
+V 59
+/svn/!svn/ver/121/trunk/yotsuba3-python/yotsuba/__init__.py
+END
+license_mit.txt
+K 25
+svn:wc:ra_dav:version-url
+V 63
+/svn/!svn/ver/127/trunk/yotsuba3-python/yotsuba/license_mit.txt
+END
