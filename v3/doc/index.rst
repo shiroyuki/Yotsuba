@@ -6,6 +6,9 @@
 Welcome to Yotsuba's documentation!
 ===================================
 
+.. warning::
+    This documentation is compatible with the lastest Yotsuba 3.0 in the Subversion repository hosted at Google Code.
+
 **Project Yotsuba** is a Python library, mainly focusing on web development,
 easing the way to solve complicate problem, improving code readability and
 reducing the length of the actual code solving a common problem. For more
@@ -18,19 +21,28 @@ Yotsuba
 -------
 
 * Developer: Juti Noppornpitak (*jnopporn at shiroyuki.com*)
-
-* Stable release: *2.3*
-
 * Testing/unstable release: *3.0*
+* Current Stable release: *2.3*
 
-Anything else?
---------------
+Explore
+-------
 .. toctree::
     :maxdepth: 2
     
     references/index
     tutorials/index
     licenses
+
+Other projects that influence this project
+------------------------------------------
+
+* `CherryPy Web Framework <http://cherrypy.org>`_
+* `Google App Engine <http://appengine.google.com>`_
+* Python ElementTree Module
+
+Somehow distantly related
+-------------------------
+* `Nokogiri <http://nokogiri.org/>`_, an HTML, XML, SAX, & Reader parser with the ability to search documents via XPath or CSS3 selectors which is very similar to :py:mod:`yotsuba.lib.kotoba`.
 
 ..
     Indices and tables
