@@ -1,3 +1,9 @@
+"""
+**Kotoba** is an XML parsing module mainly using CSS selectors level 3. This module
+is inspired by the well-known jQuery JavaScript library. However, unlink jQuery,
+Kotoba strictedly follows the working draft of CSS selectors level 3 (W3C
+proposed recomendation).
+"""
 import os
 import re
 import codecs
@@ -26,7 +32,16 @@ log = base.logger.getBasic("Yotsuba/Kotoba", base.logger.level.debugging)
 base.logger.disable()
 
 class Kotoba(object):
-    ''' XML Parser with Level-3 CSS Selectors '''
+    '''
+    XML Parser with Level-3 CSS Selectors
+    
+    Currently supported selectors:
+    
+    * selectors with at least one of element name, attributes and pseudo classes (only ``:root`` and ``:empty``)
+    * all four combinations of selectors are supported (e.g., ``selector_1 operator_1 selector_2 ...``)
+    * support wildcard search (only for element name)
+    * support multi combinations in a single statement (e.g., ``combo_1, combo_2``)
+    '''
     def __init__(self, source = None):
         """
         Construct an XML parser using CSS3 selectors

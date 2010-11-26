@@ -1,3 +1,5 @@
+                (For Yotsuba 3 by Juti Noppornpitak)
+
                     GNU GENERAL PUBLIC LICENSE
                        Version 3, 29 June 2007
 

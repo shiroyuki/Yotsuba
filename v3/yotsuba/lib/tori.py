@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
 '''
-Tori web framework
-
-This is a simple web framework working on the top of CherryPy 3.1+. It is designed
-to get started with CherryPy without repeating the commonly used configuration
-or procedure to run the application.
+**Tori web framework**  is a simple web framework working on the top of CherryPy
+3.1+. It is designed to get started with CherryPy without repeating the commonly
+used configuration or procedure to run the application.
 
 It is also designed to with deployment in mind where the app starter can be used
-as standalone WSGI server, WSGI application (wrapper) or Google-App-Engine application.
+as standalone WSGI server, WSGI application (wrapper) or Google App Engine application.
 '''
 
 __version__ = 1.0
@@ -183,8 +181,34 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
     """
     Set up the environment
     
-    configuration_filename is the name of the configuration file in XML. By
+    `configuration_filename` is the name of the configuration file in XML. By
     default, it is null and instruct the system to use the default settings.
+    
+    `use_tori_custome_error_page` is a flag to tell whether the application
+    process should use the nicer custom error page. Please note that enabling
+    this feature will slightly decrease performance. This is a known issue
+    for CherryPy 3.1+.
+    
+    `support_unicode` is a flag to tell whether the application process should
+    support unicode. Please note that enabling this feature will slightly decrease performance.
+    
+    `enable_compression` is a flag to tell whether the application process
+    should compress the output. Please note that enabling this feature will
+    decrease performance and possibly mess up JavaScript. This feature is
+    disabled by default when the X/HTML document contains **pre** elements.
+    Use with caution.
+    
+    `auto_config` is a flag to tell whether the application process
+    should create a configuration file (named by `configuration_filename`)
+    automatically if not existed. When the function detect that the configuration
+    file doesn't exist, with this flag enabled, it will create the configuration
+    file with the default configuration. Then, it will terminated the process.
+    This gives the developers an opportunity to config the settings before proceeding.
+    
+    `additional_config` is a configuration dictionary for CherryPy 3.1+. It is
+    for adding some additional configuration directly to CherryPy which is the
+    underlying framework. Please note that this will override any configuration
+    from the configuration file.
     """
     
     global mode
@@ -997,7 +1021,7 @@ class BaseInterface(object):
 
 class RESTInterface(BaseInterface):
     '''
-    Abstract class for RESTful Interface. Only compatible with CherryPy 3.1+.
+    Abstract class for a RESTful Interface based on *BaseInterface*. Only compatible with CherryPy 3.1+.
     '''
     __class__ = "RESTInterface"
     

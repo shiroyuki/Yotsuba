@@ -1,8 +1,5 @@
 """
 Simple File System API for Yotsuba 3
-
-Author: Juti Noppornpitak <juti_n@yahoo.co.jp>
-Copyright: Shiroyuki Studio
 """
 import os
 import cPickle
@@ -20,6 +17,11 @@ WRITE_PICKLE    = 'pickle::write'
 
 # Make directory
 def mkdir(destpath):
+    '''
+    Make directory with `os.mkdir` at *destpath*
+    
+    Return true if no error is found during execution.
+    '''
     try:
         os.mkdir(destpath)
         return True
@@ -28,20 +30,21 @@ def mkdir(destpath):
 
 # Check the size of file or directory
 def size(destpath):
+    '''
+    Get the size of the content at *destpath*
+    '''
     size = int(os.stat(destpath)[6])
     return size
 
 # Friendly Path Identifier
 def abspath(destpath, request_relative_path_fixed = False):
     if request_relative_path_fixed:
-        if not re.compile('^/').match(destpath):
-            destpath = '/' + destpath
-        return os.path.abspath( os.getcwd() + destpath )
+        return os.path.abspath( os.path.join(os.getcwd(), destpath) )
     else:
         return os.path.abspath( destpath )
 
 # Symbol-instance checker
-def checkType(destpath):
+def check_type(destpath):
     if not os.path.exists(destpath):
         return -1
     if os.path.isfile( abspath( destpath) ) or (os.path.islink( abspath( destpath ) ) and os.path.isfile( abspath( destpath) ) ):
@@ -61,10 +64,10 @@ def executable(destpath):
     return    os.access(os.path.abspath(destpath), os.X_OK)
 
 def isfile(destpath):
-    return    checkType(destpath) == FILE
+    return    check_type(destpath) == FILE
 
 def isdir(destpath):
-    return    checkType(destpath) == DIRECTORY
+    return    check_type(destpath) == DIRECTORY
 
 # Browsing Function
 def browse(destpath, request_abspath_shown = False):
@@ -99,6 +102,15 @@ def browse(destpath, request_abspath_shown = False):
 
 # Reading Function
 def read(filename = '', mode = READ_NORMAL):
+    '''
+    Read file *filename* and return the content
+    
+    Supported modes:
+    
+    * READ_NORMAL is to read as a text file using 'r' mode
+    * READ_BINARY is to read as a binary file using 'rb' mode
+    * READ_PICKLE is to read as a pickle file (serialized object) using 'rb' mode
+    '''
     if filename == '':
         # read stdin by default
         return sys.stdin.read()
@@ -115,23 +127,18 @@ def read(filename = '', mode = READ_NORMAL):
     data = open(filename, mode).read()
     return data
 
-# Web Data Fetching Function
-def readWeb(url):
-    try:
-        import pycurl
-        rp = pycurl.Curl()
-        rp.setopt(pycurl.URL, url)
-        rp.perform()
-        return rp.getinfo(pycurl.HTTP_CODE)
-    except:
-        return None
-
 # Writing Function
 def write(filename, data, mode = WRITE_NORMAL):
+    '''
+    Write the *data* to file *filename*
+    
+    Supported modes:
+    
+    * WRITE_NORMAL is to write as a text file using 'w' mode
+    * WRITE_BINARY is to write as a binary file using 'wb' mode
+    * WRITE_PICKLE is to write as a pickle file (serialized object) using 'wb' mode
+    '''
     if mode == WRITE_PICKLE:
-        # use pickle for writing
-        #if exists(filename):
-        #    os.unlink(filename)
         try:
             fp = open(filename, 'wb')
             cPickle.dump(data, fp)
