@@ -1,12 +1,13 @@
 """
-High-level multi-threading framework for Yotsuba 3
+Fuoco is a simple **multi-threading programming framework** for Yotsuba 3. This
+framework is to make multi-threading programming in Python even easier. The
+framework will block the caller thread until all data is processed.
 
-This framework is to make multi-threading programming in Python even easier. The
-current core is compatible with Python 2.6+.
+At the current state of the development, there are known limitations:
 
-At the current state of the development, there is a known limitation that it can
-only run one kind of the worker. Also, the framework will block the caller thread
-until all data is processed.
+#. ``MultiThreadingFramework`` can only use one kind of the worker at a time.
+#. ``MultiThreadingFramework.run`` can not return anything. Global variables
+   can be used to resolve this problem.
 """
 
 import sys
@@ -28,6 +29,12 @@ def sample_worker_function(data):
     url = data
     # do something with the data
 
+class UnsupportedInputList(Exception):
+    ''' Exception for unsupported input list '''
+
+class UnsupportedCommonArguments(Exception):
+    ''' Exception for unsupported common arguments '''
+
 class ThreadTermSignal(object):
     '''
     Terminating Signal only used by MultiThreadingFramework
@@ -40,98 +47,96 @@ class MultiThreadingFramework(object):
     Simple multi-threading framework for small tasks.
     '''
     __scan_only__ = ['run']
-    dataQueue = None
-    numberOfFalseTermSignal = None
+    list_types = [tuple, list]
+    default_max_thread = 4
+    data_queue = None
+    number_of_false_term_signals = None
     
-    def run(self, input, worker, args = None, simulteneousWorkerLimit = None):
+    def run(self, input, worker, common_args = None, max_thread = None):
         '''
         Run multiple workers simulteneously (in multiple threads).
         
-        The parameter *worker* is a reference to a function that will be called by
-        the thread.
+        The parameter `worker` is a reference to a function that will be called by
+        each thread.
         
-        The parameter *input* is the input list that will be feeded to the queue.
+        The parameter `input` is the input list that will be feeded to the queue.
         
-        The parameter *worker* is the data processing function. there is no need for it to handle the synchronization.
+        The parameter `common_args` is the common arguements for the worker.
         
-        @param args: the arguement for the worker
-        @param simulteneousWorkerLimit: the limit of how many threads can be running simulteneously. (Optional, default: 4 or less depends on the length of urls)
+        The parameter `max_thread` is the maximum number of threads used in one run. (Optional, default: 4)
         '''
-        simulteneousWorkerLimit = (simulteneousWorkerLimit is None and type(simulteneousWorkerLimit) is not int) and 4 or simulteneousWorkerLimit
         
-        self.dataQueue = Queue()
-        self.numberOfFalseTermSignal = 0
+        max_thread = (max_thread is None and type(max_thread) is not int) and self.default_max_thread or max_thread
+        
+        self.data_queue = Queue()
+        self.number_of_false_term_signals = 0
         threads = []
         
-        if type(input) is not list:
-                raise Exception("The list of inputs for this method must be a list.")
+        if type(input) not in self.list_types:
+            raise UnsupportedInputList
         
-        if args is not None:
-            if type(args) not in [tuple, list]:
-                raise Exception("The arguements for this method must be either a tuple or a list.")
-            if len(args) > 0:
-                args = list(args)
-                args = [worker] + args
-                args = tuple(args)
+        if common_args is not None:
+            if type(common_args) not in self.list_types:
+                raise UnsupportedCommonArguments
+            
+            if len(common_args) > 0:
+                args = list(common_args)
+                args = [worker] + common_args
+                args = tuple(common_args)
             else:
                 args = tuple([worker])
         
         # start threads
-        for i in xrange(simulteneousWorkerLimit):
+        for i in range(max_thread):
             t = Thread(target = self.__thread, args = args)
             t.daemon = True
             t.start()
             threads.append(t)
         
-        # add ThreadTermSignal
-        inputData = list(input)
-        inputData.extend([ThreadTermSignal] * simulteneousWorkerLimit)
+        # push data in list
+        input_data = list(input)
         
-        # put in the queue
-        for data in inputData:
-            self.__addData(data, False)
+        # add ThreadTermSignal
+        input_data.extend([ThreadTermSignal] * max_thread)
+        
+        # put everything in the data queue
+        for data in input_data:
+            self.add_data(data, False)
     
         # block until all contents are downloaded
-        self.dataQueue.join()
+        self.data_queue.join()
         
-        self.dataQueue = None
+        self.data_queue = None
         for thread in threads:
             del thread
         del threads
     
-    def __addData(self, data, addTermSignal):
-        self.dataQueue.put(data)
+    def add_data(self, data, add_term_signal):
+        self.data_queue.put(data)
         
     def __thread(self, worker, *args):
         try:
             while True:
-                returnedData = None
-                data = self.dataQueue.get()
+                returned_data = None
+                data = self.data_queue.get()
                 
                 # Check for the term signal
                 if data is ThreadTermSignal:
                     # If this is false alarm
-                    if self.numberOfFalseTermSignal > 0:
-                        self.numberOfFalseTermSignal -= 1
+                    if self.number_of_false_term_signals > 0:
+                        self.number_of_false_term_signals -= 1
                         continue
                     else:
                         sys.exit()
                 
                 # Call the processor
                 if len(args) > 0:
-                    returnedData = worker(data, *args)
+                    returned_data = worker(data, *args)
                 else:
-                    returnedData = worker(data)
+                    returned_data = worker(data)
                 
                 # If the worker return something, add the data to the queue.
-                if returnedData is not None:
-                    self.__addData(returnedData, True)
-                
-                self.dataQueue.task_done()
-        except SystemExit:
-            self.dataQueue.task_done()
-            pass
-        except:
-            self.dataQueue.task_done()
-            pass
-
+                if returned_data: self.add_data(returned_data, True)
+                self.data_queue.task_done()
+        except SystemExit:  pass
+        finally:            self.data_queue.task_done()

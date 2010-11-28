@@ -4,85 +4,103 @@ Lesson 1: Multi-threading programming
 Scenario
 --------
 
-Suppose you want to write a code that fetch RSS feeds from multiple sources at
-the given time.
+Suppose you want to write a code to find files larger than 100MB in multiple location.
 
-::
+.. code-block:: python
+    :linenos:
 
-    from yotsuba.lib.aria import Feeds
+    '''
+    Multi-thread disk scanner for large files
     
-    # input
-    urls = [
-        ("my blog's rss", 'http://nikki.shiroyuki.com/rss'),
-        ("service status", 'http://status.shiroyuki.com/rss')
-    ]
+    .. codeauthor:: Juti Noppornpitak <juti_n@yahoo.co.jp>
+    '''
     
-    # output
-    feeds = {}
+    from math import pow
+    from yotsuba.core import base, fs
     
-    # worker
-    def feed_receiver(input, output):
-        description, url = input
-        feeds = Feeds.make_from_rss_feed(url)
-        output[description[0]] = feeds # description: processed response
+    threshold = pow(1024,2) * 100 # 100 MB
+    inputs = []
+    entries = []
+    locations = ["/Users/jnopporn/Downloads", "/Users/jnopporn/Documents", "/Applications"]
     
-    for url in urls:
-        feed_receiver(url, feeds)
+    def worker(i):
+        size = fs.size(i)
+        if size > threshold:
+            entries.append((i, fs.size(i)))
+    
+    print "Threshold: %16s" % base.convert_to_readable_size(threshold)
+    
+    for location in locations:
+        all_entries = fs.browse(location, True)
+        inputs.extend(all_entries['directories'])
+        inputs.extend(all_entries['files'])
+    
+    for i in inputs:
+        worker(i)
+    
+    for e in entries:
+        print "%16s\t%s" % (base.convert_to_readable_size(e[1]), e[0])
 
-The good news is that retrieving something via HTTP is very simple. However,
-the bad news is that retrieving too many feeds linearly is obviously slow. So,
-let's use Fuoco (:py:mod:`yotsuba.core.mt`) to help you.
+Although this is very easy, if you are looking in a large number of locations,
+multiple threads might speed up the code.
 
 Solution
 --------
 
-First of all, let's import ``MultiThreadingFramework`` from :py:mod:`yotsuba.core.mt`.
+First of all, let's import :py:mod:`yotsuba.core.mt`.
 
-Then, replace the *for* loop with the following::
+Then, replace the ``for`` loop with the following::
 
-    mtfw = MultiThreadingFramework()
+    mtfw = mt.MultiThreadingFramework()
     mtfw.run(
-        urls,
-        feed_receiver,
-        tuple([feeds])
+        inputs,
+        worker
     )
 
 In the end, you will have something like below.
 
-::
+.. code-block:: python
+    :linenos:
 
-    from yotsuba.core.mt import MultiThreadingFramework
-    from yotsuba.lib.aria import Feeds
+    '''
+    Multi-thread disk scanner for large files
     
-    # input
-    urls = [
-        ("my blog's rss", 'http://nikki.shiroyuki.com/rss'),
-        ("service status", 'http://status.shiroyuki.com/rss')
-    ]
+    .. codeauthor:: Juti Noppornpitak <juti_n@yahoo.co.jp>
+    '''
     
-    # output
-    feeds = {}
+    from math import pow
+    from yotsuba.core import base, fs, mt
     
-    # thread worker
-    def feed_receiver(input, output):
-        description, url = input
-        feeds = Feeds.make_from_rss_feed(url)
-        output[description[0]] = feeds # description: processed response
+    threshold = pow(1024,2) * 100 # 100 MB
+    inputs = []
+    entries = []
+    locations = ["/Users/jnopporn/Downloads", "/Users/jnopporn/Documents", "/Applications"]
     
-    mtfw = MultiThreadingFramework()
-    mtfw.run(
-        urls,
-        feed_receiver,
-        tuple([feeds])
-    )
+    def worker(i):
+        size = fs.size(i)
+        if size > threshold:
+            entries.append((i, fs.size(i)))
+    
+    print "Threshold: %16s" % base.convert_to_readable_size(threshold)
+    
+    for location in locations:
+        all_entries = fs.browse(location, True)
+        inputs.extend(all_entries['directories'])
+        inputs.extend(all_entries['files'])
+    
+    mtfw = mt.MultiThreadingFramework()
+    mtfw.run(inputs, worker, tuple())
+    
+    for e in entries:
+        print "%16s\t%s" % (base.convert_to_readable_size(e[1]), e[0])
 
 What is the difference?
 -----------------------
 
-When you use ``for`` loop, each call to ``feed_receiver`` will pause the caller
-thread until ``feed_receiver`` finishes execution. In the meanwhile,
-:py:mod:`yotsuba.core.mt.MultiThreadingFramework` is retrieving data from
-multiple sources simutaneously in multiple threads.
+When you use ``for`` loop, each call to ``worker`` will pause the caller
+thread until ``worker`` finishes execution. In the meanwhile,
+:py:mod:`yotsuba.core.mt.MultiThreadingFramework` scans multiple location
+simutaneously in multiple threads.
 
 .. note::
     After execution, :py:mod:`yotsuba.core.mt.MultiThreadingFramework` will kill
@@ -91,5 +109,12 @@ multiple sources simutaneously in multiple threads.
 Next, :doc:`lesson2-xml-parsing`
 
 .. seealso::
+
+    Module :py:mod:`yotsuba.core.base`
+        Base Module
+    
+    Module :py:mod:`yotsuba.core.fs`
+        File System API
+    
     Module :py:mod:`yotsuba.core.mt`
-        XML Parser with CSS selectors
+        Fuoco Multi-threadinf Programming Framework
