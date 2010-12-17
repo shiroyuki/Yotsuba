@@ -4,8 +4,8 @@ import re
 import hashlib as h
 import logging
 
-__VERSION__ = 3.0
-REPO_TYPE = "svn"
+__version__ = 3.0
+REPO_TYPE = "svn+git"
 
 class logger(object):
     '''
@@ -37,7 +37,7 @@ def get_logger(name, level=logging.DEBUG): # default for name should be __name__
     return log
 
 def getVersion():
-    return u"Yotsuba %s" % __VERSION__
+    return u"Yotsuba %s" % __version__
 
 # Utilities
 def isList(objRef):

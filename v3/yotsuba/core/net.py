@@ -2,6 +2,7 @@ LOAD_GAE = False
 USE_DEFAULT = False
 
 import re
+import urllib
 
 try:
     from google.appengine.api import urlfetch
@@ -11,14 +12,10 @@ except:
 
 if not LOAD_GAE:
     import httplib
-    import urllib
-    import urllib2
 
 from yotsuba.core import base
 
 class Http(object):
-    DEFAULT_QUERYSTRING = u''
-    
     @staticmethod
     def do(method, url, data=None, headers=None, bypass_url_encoding=False):
         # Set the optional parameters
@@ -72,19 +69,18 @@ class Http(object):
             
             # Prepare the data
             url = base.convertToUnicode(url)
-            query_string = Http.build_data(data)
+            form_data = urllib.urlencode(data)
+            #query_string = Http.build_data(data)
             
             # Merge data
-            url = url + query_string
+            #url = url + query_string
             
             # Make a call
-            raw_response = None
-            raw_response = urlfetch.fetch(url)
-            if raw_response.status_code < 400:
-                response = Response(raw_response.status_code, raw_response.headers, raw_response.content)
+            raw_response = urlfetch.fetch(url, form_data)
+            response = Response(raw_response.status_code, raw_response.headers, raw_response.content)
             
             # free memory
-            del query_string
+            #del query_string
             del url
             del raw_response
         else:
@@ -94,16 +90,13 @@ class Http(object):
     
     @staticmethod
     def build_data(data):
-        query_string = Http.DEFAULT_QUERYSTRING
-        if data is dict:
+        query_string = u''
+        chunks = []
+        if type(data) is dict:
             for k, v in data.iteritems():
-                if query_string == Http.DEFAULT_QUERYSTRING:
-                    query_string += u"?"
-                else:
-                    query_string += u"&"
-                k = base.convertToUnicode(k)
-                v = base.convertToUnicode(v)
-                query_string = k + u"=" + v
+                chunks.append(u'='.join([k,v]))
+            if chunks:
+                query_string = u'?%s' % '&'.join(chunks)
         return query_string
 
 class Response(object):

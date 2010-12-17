@@ -690,6 +690,9 @@ class WebFrameworkException(Exception):
     '''Exception specifically used by Tori during initilization'''
     __scan_only__ = []
 
+class CherryPyException(Exception):
+    '''Exception when dealing with errors in CherryPy wrappers which may be caused by CherryPy itself'''
+
 ####################
 # Basic Interfaces #
 ####################
@@ -991,7 +994,7 @@ class BaseInterface(object):
         
         return base.convertToUnicode(cherrypy.response.status)
     
-    def redirect(self, url, code = None, use_internal_redirection = False):
+    def redirect(self, url, code=None, soft_redirection=True):
         '''
         Redirect a URL with CherryPy's HTTPRedirect (exception).
         
@@ -999,25 +1002,23 @@ class BaseInterface(object):
         
         *code* is a HTTP status code in interger.
         
-        *use_internal_redirection* is to use CherryPy internal redirection. It
-        will use the internal routing settings and won't respond like other kind
-        of redirections. (The browser won't be prompted to move to the other address.)
+        *soft_redirection* make this method not to raise a redirection exception
+        by CherryPy. This is more customizable to what to be given back. This
+        option is strongly recommended for Google App Engine applications.
         '''
-        if base.isString(url) and url and not re.search("^https?://", url):
-            if use_internal_redirection:
-                # internal redirect
-                raise cherrypy.InternalRedirect(url)
-            else:
-                # redirect with headers
-                code = base.isIntegerNumber(code) and code or 301
-                cherrypy.response.status = code
-                response.headers['Location'] = url
-        elif base.isIntegerNumber(code):
-            # external redirect with code
-            raise cherrypy.HTTPRedirect(url, code)
+        if soft_redirection:
+            response.status = code or 302
+            response.headers['Location'] = url
         else:
-            # external redirect without code
-            raise cherrypy.HTTPRedirect(url)
+            try:
+                if code and base.isIntegerNumber(code):
+                    # external redirect with code
+                    raise cherrypy.HTTPRedirect(url, code)
+                else:
+                    # external redirect without code
+                    raise cherrypy.HTTPRedirect(url)
+            except:
+                raise CherryPyException, "Cannot redirect with CherryPy here."
 
 class RESTInterface(BaseInterface):
     '''
@@ -1065,7 +1066,7 @@ class RESTInterface(BaseInterface):
         '''
         Update the target resource
 
-        POST ./{key}
+        POST ./{key}/update
         PUT  ./{key}
         '''
         self.respond_status(405)
