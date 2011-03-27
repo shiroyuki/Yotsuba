@@ -1,8 +1,0 @@
-README
-setup.py
-yotsuba/__init__.py
-yotsuba.egg-info/PKG-INFO
-yotsuba.egg-info/SOURCES.txt
-yotsuba.egg-info/dependency_links.txt
-yotsuba.egg-info/requires.txt
-yotsuba.egg-info/top_level.txt

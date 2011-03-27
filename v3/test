@@ -1,2 +1,0 @@
-# Used on Linux only
-clear && python tests/test.py
