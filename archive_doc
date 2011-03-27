@@ -1,0 +1,6 @@
+cd doc
+make clean
+make html
+cd _build/html/
+zip -r9 doc.zip *
+mv doc.zip ../../../

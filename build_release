@@ -1,0 +1,17 @@
+#!/bin/sh
+# Pack an installable package
+# USAGE: build_release <version>
+echo
+echo "Packing for $1"
+sudo rm -Rf build
+rm *.tar.gz *.zip
+rm -Rf ../yotsuba
+hg export ./ ../yotsuba
+cd ../
+cd yotsuba
+rm -Rf build doc test* *.kpf archive_doc
+ls -lh
+cd ../
+tar -czvf yotsuba-$1.tar.gz yotsuba
+rm -Rf yotsuba
+echo
