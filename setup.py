@@ -5,7 +5,7 @@ setup(
     version     = "3.1",
     packages    = find_packages(),
     install_requires = [
-        "cherrypy==3.1.2",
-        "mako"
+        'cherrypy',
+        'mako'
     ]
 )

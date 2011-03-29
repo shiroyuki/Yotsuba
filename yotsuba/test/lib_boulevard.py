@@ -8,9 +8,9 @@ test_db = "sqlite:///%s" % test_db_location
 
 class User(b.DataInterface):
     schema = {
-        'id': {'type':b.Integer, 'primary_key': True},
-        'name': {'type':b.String},
-        'password': {'type':b.String}
+        'id':       b.DataSchema(b.Integer, primary_key=True),
+        'name':     b.DataSchema(b.String),
+        'password': b.DataSchema(b.String)
     }
 
 def test_basic():

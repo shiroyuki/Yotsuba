@@ -8,7 +8,7 @@ It is also designed to with deployment in mind where the app starter can be used
 as standalone WSGI server, WSGI application (wrapper) or Google App Engine application.
 '''
 
-__version__ = 1.0
+__version__ = 1.1
 __scan_only__ = [
     ('response', 'multiple-key dictionary', 'See cherrypy.response for more detail.'),
     ('request', 'multiple-key dictionary', 'See cherrypy.request for more detail.'),
@@ -241,7 +241,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
             'tools.decode.on':          support_unicode,
             'tools.encode.on':          support_unicode,
             'tools.gzip.on':            enable_compression,
-            'log.screen':               False                          # Disable trackback information
+            'log.screen':               True                          # Disable trackback information
         }
     }
     
@@ -378,28 +378,20 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
         base_uri = re.sub("^/", "", base_uri)
         base_uri = re.sub("/$", "", base_uri)
         
-        static_routing[base_uri + '/'] = {
-            'tools.caching.on':             True,
-            'tools.caching.cache_class':    cherrypy.lib.caching.MemoryCache,
-            'tools.caching.delay':          259200, # 3 days
-            'tools.caching.maxobjsize':     26214400, # 25 MB
-            'tools.caching.maxsize':        104857600, # 100 MB
+        static_routing[''] = {
             'tools.sessions.on':            True,
             'tools.sessions.timeout':       10,
             'tools.sessions.storage_type':  'file',
             'tools.sessions.storage_path':  path['session']
         }
         
+        static_routing[str(base_uri + '/')] = {}
+        
         default_config['global']['tools.staticdir.root'] = path['static']
         default_config['global']['tools.staticfile.root'] = path['static']
         
-        if settings['no_cache']:
-            doc_root_settings = static_routing[base_uri + '/']
-            doc_root_settings['tools.caching.on'] = False
-        
         if mode == ServiceMode.GAE:
             doc_root_settings = static_routing[base_uri + '/']
-            doc_root_settings['tools.caching.on'] = False
             del doc_root_settings['tools.sessions.storage_type']
             del doc_root_settings['tools.sessions.storage_path']
         
@@ -415,7 +407,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
             
             if __type == 'file' and __ref is not None:
                 __cKeyPath += 'name'
-                #__ref = os.path.join(path['static'], __ref)
+                __ref = os.path.join(path['static'], __ref)
             
             if __type == 'dir':
                 make_directory_if_not_existed(os.path.join(path['static'], __ref))
@@ -447,7 +439,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
                 if __type == 'dir':
                     make_directory_if_not_existed(os.path.join(path['static'], __ref))
                 
-                static_routing[__route_address] = {
+                static_routing[str(__route_address)] = {
                     str(__cKeyFlag): True,
                     str(__cKeyPath): __ref
                 }
@@ -498,7 +490,6 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
             error_template = fs.read(os.path.join(path['template'], error_template))
     except:
         raise WebFrameworkException("Error while setting up a custom error error page.")
-    
     
     cherrypy.config.update(default_config)
     

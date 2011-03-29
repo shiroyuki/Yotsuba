@@ -20,6 +20,17 @@ class DataInterfaceAlreadyInitialized(Exception): pass
 class DataInterfaceMisconfigured(Exception): pass
 class DataStoreReservedName(Exception): pass
 
+class DataSchema(object):
+    def __init__(self, kind, **attrs):
+        self.__kind = kind
+        self.__attrs = attrs
+    
+    def kind(self):
+        return self.__kind
+    
+    def attrs(self):
+        return self.__attrs
+
 # [Data Structures]
 class DataInterface(object):
     ''' Boulevard Data Interface '''
@@ -58,9 +69,7 @@ class DataStore(object):
         self.metadata.create_all(self.engine)
     
     def register(self, *data_interfaces):
-        '''
-        Register entities
-        '''
+        ''' Register entities '''
         global __master_ctrl
         
         for data_interface in data_interfaces:
@@ -83,15 +92,16 @@ class DataStore(object):
                 col_name = col_conf_name
                 if len(col_name) < 1: continue
                 
-                col_conf = data_interface.schema[col_conf_name]
-                if type(col_conf) is not dict: continue
-                
-                if 'type' not in col_conf and 'type_' not in col_conf:
+                col = data_interface.schema[col_conf_name]
+                if type(col) is not DataSchema:
                     raise DataInterfaceMisconfigured
-                elif 'type' in col_conf:
-                    # Override type_
-                    col_conf['type_'] = col_conf['type']
-                    del col_conf['type']
+                
+                col_conf = {
+                    'type_': col.kind()
+                }
+                
+                # Override type_
+                col_conf.update(col.attrs())
                 columns.append(Column(col_name, **col_conf))
             
             # Register table
