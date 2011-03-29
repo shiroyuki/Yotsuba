@@ -7,11 +7,9 @@ test_db_location = "%s/test.db" % test_basepath
 test_db = "sqlite:///%s" % test_db_location
 
 class User(b.DataInterface):
-    schema = {
-        'id':       b.DataSchema(b.Integer, primary_key=True),
-        'name':     b.DataSchema(b.String),
-        'password': b.DataSchema(b.String)
-    }
+    id          = b.DataColumn(b.Integer, primary_key=True)
+    name        = b.DataColumn(b.String)
+    password    = b.DataColumn(b.String)
 
 def test_basic():
     ctrl = b.DataStore(test_db)

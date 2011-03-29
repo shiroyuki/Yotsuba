@@ -10,6 +10,7 @@
 import re
 from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey
 from sqlalchemy.orm import mapper, sessionmaker, clear_mappers
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.exc import ArgumentError as SQLArgumentError
 from sqlalchemy.exc import OperationalError as SQLOperationalError
 from yotsuba.core import base as ybase
@@ -20,7 +21,7 @@ class DataInterfaceAlreadyInitialized(Exception): pass
 class DataInterfaceMisconfigured(Exception): pass
 class DataStoreReservedName(Exception): pass
 
-class DataSchema(object):
+class DataColumn(object):
     def __init__(self, kind, **attrs):
         self.__kind = kind
         self.__attrs = attrs
@@ -30,15 +31,21 @@ class DataSchema(object):
     
     def attrs(self):
         return self.__attrs
+    
+    def assembly(self, name):
+        attrs = {
+            'type_': self.__kind
+        }
+        attrs.update(self.__attrs)
+        return Column(name, **attrs)
 
 # [Data Structures]
 class DataInterface(object):
     ''' Boulevard Data Interface '''
-    _is_initialized = False
-    schema = None
+    _keys = {}
     def __init__(self, *args, **attrs):
         for k, v in attrs.iteritems():
-            if k not in self.schema: continue
+            if k not in self._keys: continue
             try:
                 self.__delattr__(k)
             except:
@@ -73,10 +80,8 @@ class DataStore(object):
         global __master_ctrl
         
         for data_interface in data_interfaces:
-            if '_is_initialized' not in dir(data_interface):
+            if type(data_interface) is DataInterface:
                 raise DataInterfaceRequired
-            if data_interface._is_initialized and self.raise_DI_init_err:
-                raise DataInterfaceAlreadyInitialized
             
             # Data Interface Name
             di_name = self.__extract_class_name(data_interface)
@@ -86,23 +91,26 @@ class DataStore(object):
             
             # Set up the data for each column
             columns = []
-            for col_conf_name in data_interface.schema:
-                if '_' == col_conf_name[0]: continue
+            
+            for col_name in dir(data_interface):
+                if '_' == col_name[0] or len(col_name) < 1: continue
                 
-                col_name = col_conf_name
-                if len(col_name) < 1: continue
+                column = None
+                col = eval("data_interface.%s" % col_name)
                 
-                col = data_interface.schema[col_conf_name]
-                if type(col) is not DataSchema:
+                if type(col) is InstrumentedAttribute:
+                    # Assembly the column information
+                    column = data_interface._keys[col_name].assembly(col_name)
+                elif type(col) is DataColumn:
+                    # Assembly the column information
+                    column = col.assembly(col_name)
+                    
+                    # Remember the configuration for the column
+                    data_interface._keys[col_name] = col
+                else:
                     raise DataInterfaceMisconfigured
                 
-                col_conf = {
-                    'type_': col.kind()
-                }
-                
-                # Override type_
-                col_conf.update(col.attrs())
-                columns.append(Column(col_name, **col_conf))
+                columns.append(column)
             
             # Register table
             self.__setattr__(di_name, Table(di_name, self.metadata, *columns, useexisting=True))
