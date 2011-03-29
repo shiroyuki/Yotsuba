@@ -2,3 +2,4 @@
 *.pyo
 .komodotools
 build/*
+yotsuba.egg-info
