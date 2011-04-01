@@ -12,19 +12,11 @@ Each test will be repeated twice where the first one is a cold-start test."""
 
 from yotsuba.test import core_net as net
 from yotsuba.test import lib_kotoba as kotoba
-from yotsuba.test import lib_tegami as tegami
-from yotsuba.test import lib_boulevard as boulevard
 
 def test_networking():
     h.doTests(
         "Yotsuba 3 / Core / Networking", 2,
         net.test_http_with_urllib2
-    )
-
-def test_tagemi():
-    h.doTests(
-        "Yotsuba 3 / Libraries / Tegami", 2,
-        tegami.test_TegamiBasic
     )
 
 def test_kotoba():
@@ -41,13 +33,7 @@ def test_kotoba():
         kotoba.test_custom_pseudo_class
     )
 
-def test_boulevard():
-    h.doTests(
-        "Yotsuba 4 / Libraries / Boulevard", 2,
-        boulevard.test_basic
-    )
-
-#test_kotoba()
-test_boulevard()
+test_networking()
+test_kotoba()
 
 h.textBlock("Finish all tests in %.3f sec" % h.totalUsageTime)
