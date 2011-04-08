@@ -1,30 +1,27 @@
 """
-Fuoco is a simple **multi-threading programming framework** for Yotsuba 3. This
+Fuoco is a simple **multi-threading programming framework**. This
 framework is to make multi-threading programming in Python even easier. The
 framework will block the caller thread until all data is processed.
 
 At the current state of the development, there are known limitations:
 
 #. ``MultiThreadingFramework`` can only use one kind of the worker at a time.
-#. ``MultiThreadingFramework.run`` can not return anything. Global variables
-   can be used to resolve this problem.
+#. ``MultiThreadingFramework.run`` can not return anything. Global variables can be used to resolve this problem.
 """
 
 import sys
 from Queue import Queue
 from threading import Thread, activeCount
 
-__scan_only__ = ['MultiThreadingFramework', 'sample_worker_function']
-__version__ = 1.1
+__version__ = 2.0
 
 def sample_worker_function(data):
     '''
     This is the sample worker function/method.
     
     Requirements for the worker function/method:
-        1.  The first parameter must be something that stores the data from the queue.
-        2.  The worker never returns anything unless it is a new data that you want it
-            to be processed in the current pool.
+    #.  The first parameter must be something that stores the data from the queue.
+    #.  The worker never returns anything unless it is a new data that you want it to be processed in the current pool.
     '''
     url = data
     # do something with the data
@@ -39,14 +36,23 @@ class ThreadTermSignal(object):
     '''
     Terminating Signal only used by MultiThreadingFramework
     '''
-    __scan_only__ = []
-    pass
+
+class BaseMultiThreadingFramework(object):
+    '''
+    Base multi-threading framework. Not suite for direct use.
+    '''
+    _list_types = [tuple, list]
+    _default_max_thread = 4
+    _data_queue = None
+    _number_of_false_term_signals = None
+    
+    def __init__(self, worker, *common_arguments_for_worker):
+        pass
 
 class MultiThreadingFramework(object):
     '''
     Simple multi-threading framework for small tasks.
     '''
-    __scan_only__ = ['run']
     list_types = [tuple, list]
     default_max_thread = 4
     data_queue = None

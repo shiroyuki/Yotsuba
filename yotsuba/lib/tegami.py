@@ -13,7 +13,8 @@ from re import sub
 from yotsuba.core import base
 
 class Tegami(object):
-    def to_entity(self, show_only_public=True):
+    def to_dict(self, show_only_public=True):
+        ''' Convert this instance into a dictionary instance '''
         attributes = {}
         for class_item in dir(self):
             # Filter a private item out
@@ -26,12 +27,14 @@ class Tegami(object):
         return attributes
     
     def to_json(self, show_only_public=True):
+        ''' Convert this instance into a JSON object '''
         attributes = {}
         for name, property in self.to_entity(show_only_public).iteritems():
             attributes[name] = property.to_dict()
         return json_dumps(attributes)
     
     def to_xml(self, show_only_public=True):
+        ''' Convert this instance into an XML document '''
         xmldoc = [
             '<?xml version="1.0" encoding="utf-8"?><entity type="%s">'
             % TegamiEntityProperty.type_to_string(self)
