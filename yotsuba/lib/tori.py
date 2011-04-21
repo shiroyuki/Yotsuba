@@ -50,6 +50,11 @@ except:
     pass
 
 try:
+    from django.template import Template as DjangoTemplate
+except:
+    pass
+
+try:
     from google.appengine.api.memcache import Client as google_cache
 except:
     pass
@@ -69,6 +74,9 @@ template = {
         'engine': None,
         'get': None,
         'cache': {}
+    },
+    'django': {
+        'compiled_templates': None
     },
     'tenjin': {
         'engine': None
@@ -443,7 +451,6 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
                     str(__cKeyFlag): True,
                     str(__cKeyPath): __ref
                 }
-    
     except:
         raise WebFrameworkException("Error while setting up routing")
     
@@ -455,6 +462,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
         else:
             template['use'] = 'mako'
         
+        # Set up the system
         if template['use'] == 'tenjin':
             enable_caching = not settings['no_cache']
             if enable_caching:
@@ -463,22 +471,25 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
                 path=[path['template']],
                 cache = enable_caching
             )
+        elif template['use'] == 'django':
+            template['django']['compiled_templates'] = {}
+        
+        # Set up Mako as a backup
+        template_filesystem_checks = settings['no_cache']
+        if mode == ServiceMode.GAE:
+            template['mako']['engine'] = TemplateLookup(
+                directories = [path['template']],
+                filesystem_checks=template_filesystem_checks,
+                **template['mako']['options']
+            )
         else:
-            template_filesystem_checks = settings['no_cache']
-            if mode == ServiceMode.GAE:
-                template['mako']['engine'] = TemplateLookup(
-                    directories = [path['template']],
-                    filesystem_checks=template_filesystem_checks,
-                    **template['mako']['options']
-                )
-            else:
-                template['mako']['engine'] = TemplateLookup(
-                    directories = [path['template']],
-                    module_directory=os.path.join(path['session'], 'cache', 'template'), # disable for GAE apps
-                    filesystem_checks=template_filesystem_checks,
-                    **template['mako']['options']
-                )
-            template['mako']['get'] = template['mako']['engine'].get_template
+            template['mako']['engine'] = TemplateLookup(
+                directories = [path['template']],
+                module_directory=os.path.join(path['session'], 'cache', 'template'), # disable for GAE apps
+                filesystem_checks=template_filesystem_checks,
+                **template['mako']['options']
+            )
+        template['mako']['get'] = template['mako']['engine'].get_template
     except:
         raise WebFrameworkException("Error while setting up the template system")
     
@@ -563,9 +574,42 @@ def render(source, **kwargs):
         elif not enable_direct_rendering:
             raise cherrypy.HTTPError(500, "Text rendering with Tenjin is not supported at this time.")
         else:
-            raise cherrypy.HTTPError(500, "Cannot render the template with Tenjin")
+            raise cherrypy.HTTPError(500, "Cannot render the template with Tenjin.")
         
         output = tenjin_engine.render(source, kwargs)
+    elif template['use'] == 'django':
+        # Render with Django
+        compiled_templates = template['django']['compiled_templates']
+        template_compiled = False
+        source_found = False;
+        source_hash = base.hash(source)
+        source_location = source
+        template_context = None
+        
+        # Check if the source is already compiled or existed as a file
+        if source_hash in compiled_templates:
+            template_compiled = True
+        elif os.path.exists(source_location):
+            source_found = True
+        elif os.path.exists(os.path.join(path['template'], source_location)):
+            source_found = True
+            source_location = os.path.join(path['template'], source_location)
+        
+        # Compile the source
+        if source_found or template_compiled:
+            compiled_templates[source_hash] = DjangoTemplate(fs.read(source_location))
+        elif enable_direct_rendering and base.isString(source):
+            template_compiled = True
+            compiled_templates[source_hash] = DjangoTemplate(source)
+        
+        # Set up the context if the source is compiled and ready to use.
+        if template_compiled:
+            template_context = Context(kwargs)
+        else:
+            raise cherrypy.HTTPError(500, "Cannot find the template to render with Django Template System.")
+        
+        # Render with the given context.
+        output = compiled_templates[source_hash].render(template_context)
     else:
         # Render with Mako
         mako_template = None
