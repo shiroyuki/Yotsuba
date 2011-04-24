@@ -33,47 +33,22 @@ from wsgiref import handlers
 
 import cherrypy
 
-from yotsuba.core import base, fs
+from yotsuba.core       import base, fs
 from yotsuba.lib.kotoba import Kotoba
 
-try:
-    from mako.template import Template
-    from mako.lookup import TemplateLookup
-    from mako.exceptions import html_error_template
-except:
-    pass
+from mako               import __version__ as mako_version
+from mako.template      import Template
+from mako.lookup        import TemplateLookup
+from mako.exceptions    import html_error_template
 
-try:
-    from tenjin import Engine, MemoryCacheStorage
-    from tenjin.helpers import *
-except:
-    pass
-
-try:
-    from google.appengine.api.memcache import Client as google_cache
-except:
-    pass
+try:    from google.appengine.api.memcache import Client as google_cache
+except: pass
 
 # Global variables
 debug = False
 settings = {}
 memory = {}
-template = {
-    'use': 'mako', # default is mako
-    'mako': {
-        'options': {
-            'input_encoding':  'utf-8',
-            'output_encoding': 'utf-8',
-            'encoding_errors': 'replace'
-        },
-        'engine': None,
-        'get': None,
-        'cache': {}
-    },
-    'tenjin': {
-        'engine': None
-    }
-}
+template = None
 
 response = cherrypy.response
 request = cherrypy.request
@@ -129,6 +104,7 @@ class ServerInterface(object):
                 largs[2] = static_routing
         else:
             print "Init:\tStatic Routing from the manual configuration"
+        print "Template: Mako Template System %s" % mako_version
         print "Server:\tRunning (press [CTRL]+[C] to stop)"
         cherrypy.quickstart(*largs, **kwargs)
         print
@@ -220,6 +196,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
     global settings
     global template
     global debug
+    global TEMPLATE_DIRS # Only for Django
     
     # Initialization
     __base_config_key = 'tools.static'
@@ -253,7 +230,6 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
     standard_config = """<?xml version="1.0" encoding="UTF-8"?>
     <webconfig>
         <mode>local</mode>
-        <rendering>mako</rendering>
         <base_path>
             <static>static</static>
             <template>template</template>
@@ -358,7 +334,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
         recognized_options = {
             'debug': True,
             'no_cache': True,
-            'direct_rendering': True,
+            'direct_rendering': False,
             'text_minification': False
         }
         
@@ -378,14 +354,12 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
         base_uri = re.sub("^/", "", base_uri)
         base_uri = re.sub("/$", "", base_uri)
         
-        static_routing[''] = {
+        static_routing[str(base_uri + '/')] = {
             'tools.sessions.on':            True,
             'tools.sessions.timeout':       10,
             'tools.sessions.storage_type':  'file',
             'tools.sessions.storage_path':  path['session']
         }
-        
-        static_routing[str(base_uri + '/')] = {}
         
         default_config['global']['tools.staticdir.root'] = path['static']
         default_config['global']['tools.staticfile.root'] = path['static']
@@ -443,42 +417,12 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
                     str(__cKeyFlag): True,
                     str(__cKeyPath): __ref
                 }
-    
     except:
         raise WebFrameworkException("Error while setting up routing")
     
     try:
-        # Determine the template system
-        xml_on_rendering = xmldoc.get("rendering")
-        if xml_on_rendering:
-            template['use'] = xml_on_rendering.data()
-        else:
-            template['use'] = 'mako'
-        
-        if template['use'] == 'tenjin':
-            enable_caching = not settings['no_cache']
-            if enable_caching:
-                enable_caching = MemoryCacheStorage()
-            template['tenjin']['engine'] = Engine(
-                path=[path['template']],
-                cache = enable_caching
-            )
-        else:
-            template_filesystem_checks = settings['no_cache']
-            if mode == ServiceMode.GAE:
-                template['mako']['engine'] = TemplateLookup(
-                    directories = [path['template']],
-                    filesystem_checks=template_filesystem_checks,
-                    **template['mako']['options']
-                )
-            else:
-                template['mako']['engine'] = TemplateLookup(
-                    directories = [path['template']],
-                    module_directory=os.path.join(path['session'], 'cache', 'template'), # disable for GAE apps
-                    filesystem_checks=template_filesystem_checks,
-                    **template['mako']['options']
-                )
-            template['mako']['get'] = template['mako']['engine'].get_template
+        # Set up Mako template system
+        template = TemplateInterface(settings['no_cache'], path['template'])
     except:
         raise WebFrameworkException("Error while setting up the template system")
     
@@ -514,81 +458,12 @@ def start_session():
 
 def render(source, **kwargs):
     '''
-    This function is to render templates. It is currently support Mako template
-    only. It is to support other libraries in the future.
+    *Deprecated in Yotsuba 4*
     
-    This function *can* have more than *one* parameter. There are *three* optional
-    parameters only used by this function which are described below. The *rest* are
-    context variables for rendering.
-    
-    The required parameter *source* is a string indicating the location of the
-    template. If the optional parameter *direct_rendering* is false, it will
-    attempt to render the *source* directly as if it is a template data.
-    
-    The optional parameter *direct_rendering* is a boolean acting as a switch to
-    enable or disable the behaviour described above. This option may be set
-    globally in the configuration file. It is set to 'False' by default.
-    
-    The optional parameter *text_minification* is a boolean acting as a switch to
-    enable or disable auto HTML minification. This option may be set globally in
-    the configuration file. Currently, it doesn't fully support JavaScript
-    minification. It is set to 'False' by default.
+    See *TemplateInterface.render*.
     '''
-    global base_uri
-    global settings
     global template
-    
-    # Local flags (optional parameters)
-    flag_memory_cache_template = "cache_template"
-    flag_text_minification = "text_minification"
-    flag_direct_rendering = "direct_rendering"
-    
-    # Switches
-    enable_text_minification = kwargs[flag_text_minification] if flag_text_minification in kwargs else (flag_text_minification in settings and settings[flag_text_minification])
-    enable_direct_rendering = kwargs[flag_direct_rendering] if flag_direct_rendering in kwargs else (flag_direct_rendering in settings and settings[flag_direct_rendering])
-    
-    # Default output
-    output = ''
-    
-    if template['use'] == 'tenjin':
-        # Render with Tenjin
-        tenjin_engine = None
-
-        if os.path.exists(source):
-            path_to_source = os.path.dirname(source)
-            source = source[len(path_to_source) + 1:]
-            tenjin_engine = Engine(path=[path_to_source])
-        elif os.path.exists(os.path.join(path['template'], source)):
-            tenjin_engine = template['tenjin']['engine']
-        elif not enable_direct_rendering:
-            raise cherrypy.HTTPError(500, "Text rendering with Tenjin is not supported at this time.")
-        else:
-            raise cherrypy.HTTPError(500, "Cannot render the template with Tenjin")
-        
-        output = tenjin_engine.render(source, kwargs)
-    else:
-        # Render with Mako
-        mako_template = None
-        
-        if os.path.exists(source):
-            mako_template = Template(filename = source, **template['mako']['options'])
-        elif os.path.exists(os.path.join(path['template'], source)):
-            mako_template = template['mako']['get'](source)
-        elif not enable_direct_rendering:
-            mako_template = Template(source, **template['mako']['options'])
-        else:
-            raise cherrypy.HTTPError(500, "Cannot render the template with Mako")
-        
-        try:
-            output = mako_template.render(**kwargs)
-        except:
-            raise Exception(html_error_template().render())
-    
-    # HTML Minification
-    if enable_text_minification:
-        output = minify_content(output, True)
-    
-    return output
+    return template.render(source, **kwargs)
 
 def minify_content(original_code, full_compression=False, force_op=False, file_type=None):
     '''
@@ -690,6 +565,125 @@ class CherryPyException(Exception):
 
 webinterface = cherrypy.expose
 webinterface.__doc__ = ''' Use this method as a web interface. (Based cherrypy.expose) '''
+
+######################
+# Template Interface #
+######################
+
+class TemplateInterface(object):
+    '''
+    Template Interface
+    '''
+    __default_options = {
+        'input_encoding':       'utf-8',
+        'output_encoding':      'utf-8',
+        'encoding_errors':      'replace'
+    }
+    __cache = {}
+    
+    def __init__(self, enable_auto_update, *directories, **options):
+        self.__directories = directories
+        self.__cache_enabled = not enable_auto_update
+        
+        template_params = {
+            'directories':          self.__directories,
+            'filesystem_checks':    False
+        }
+        
+        template_params.update(self.__default_options)
+        
+        if not mode == ServiceMode.GAE:
+            template_params['module_directory'] = os.path.join(path['session'], 'cache', 'template')
+            template_params['filesystem_checks'] = enable_auto_update
+        
+        template_params.update(options)
+        
+        self.__engine =  TemplateLookup(**template_params)
+        self.__get = self.__engine.get_template
+    
+    def render(self, source, **kwargs):
+        '''
+        This function is to render Mako templates.
+        
+        This function *can* have more than *one* parameter. There are *three* optional
+        parameters only used by this function which are described below. The *rest* are
+        context variables for rendering.
+        
+        The required parameter *source* is a string indicating the location of the
+        template. If the optional parameter *direct_rendering* is false, it will
+        attempt to render the *source* directly as if it is a template data.
+        
+        The optional parameter *direct_rendering* is a boolean acting as a switch to
+        enable or disable the behaviour described above. This option may be set
+        globally in the configuration file. It is set to 'False' by default.
+        
+        The optional parameter *text_minification* is a boolean acting as a switch to
+        enable or disable auto HTML minification. This option may be set globally in
+        the configuration file. Currently, it doesn't fully support JavaScript
+        minification. It is set to 'False' by default.
+        
+        Any paarameters beside the three ones above will be treated as template context.
+        '''
+        global base_uri
+        global settings
+        global template
+        
+        # Local flags (optional parameters)
+        flag_memory_cache_template  = "cache_template"
+        flag_text_minification      = "text_minification"
+        flag_direct_rendering       = "direct_rendering"
+        
+        # Cache key
+        cache_key                   = base.hash(source)
+        
+        # Switches
+        enable_text_minification    = kwargs[flag_text_minification]    if flag_text_minification in kwargs else (flag_text_minification in settings and settings[flag_text_minification])
+        enable_direct_rendering     = kwargs[flag_direct_rendering]     if flag_direct_rendering in kwargs  else (flag_direct_rendering in settings and settings[flag_direct_rendering])
+        use_from_cache              = self.__cache_enabled and cache_key in self.__cache
+        
+        # Default output
+        output = ''
+        
+        # Actual source
+        actual_source = source
+        
+        # Render with Mako
+        compiled_template = None
+        
+        if use_from_cache:
+            compiled_template = self.__cache[cache_key]
+        else:
+            for directory in self.__directories:
+                if os.path.exists(os.path.join(directory, source)):
+                    actual_source = os.path.join(directory, source)
+                    compiled_template = self.__get(source)
+                    break
+            
+            if compiled_template:
+                pass
+            elif not compiled_template and os.path.exists(source):
+                compiled_template = Template(filename=source, **self.__default_options)
+            elif not compiled_template and enable_direct_rendering:
+                compiled_template = Template(source, **self.__default_options)
+            else:
+                if enable_direct_rendering:
+                    raise cherrypy.HTTPError(500, "Cannot render the template directly.")
+                else:
+                    raise cherrypy.HTTPError(500, "Cannot render the template from %s." % actual_source)
+        
+        try:
+            output = compiled_template.render(**kwargs)
+        except:
+            raise Exception(html_error_template().render())
+        
+        if self.__cache_enabled:
+            self.__cache[base.hash(actual_source)] = compiled_template
+        
+        # HTML Minification
+        if enable_text_minification:
+            output = minify_content(output, True)
+        
+        return output
 
 ####################
 # Basic Interfaces #
@@ -1239,7 +1233,7 @@ class UserInterface(object):
             'version':      base.getVersion(),
             'response':     responseContent
         }
-        return minify_content(render(UserInterface.TEMPLATE, direct_rendering=False, **substitutions), True)
+        return minify_content(render(UserInterface.TEMPLATE, direct_rendering=True, template_system="mako", **substitutions), True)
 
 class DefaultErrorPage(object):
     DEFAULT_TEMPLATE = """
@@ -1269,7 +1263,7 @@ class DefaultErrorPage(object):
         
         # If the error template is not specified, use the default one.
         if error_template is None:
-            responseContent = render(DefaultErrorPage.DEFAULT_TEMPLATE, direct_rendering=False, **substitutions)
+            responseContent = render(DefaultErrorPage.DEFAULT_TEMPLATE, direct_rendering=True, **substitutions)
             responseContent = UserInterface.response(responseContent)
         else:
             responseContent = render(error_template, direct_rendering=False, **substitutions)

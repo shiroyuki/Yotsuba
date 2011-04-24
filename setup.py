@@ -2,10 +2,11 @@ from setuptools import setup, find_packages
 
 setup(
     name        = "yotsuba",
-    version     = "3.1",
+    version     = "4.0",
     packages    = find_packages(),
     install_requires = [
         'cherrypy',
-        'mako'
+        'mako',
+        'sqlalchemy'
     ]
 )
