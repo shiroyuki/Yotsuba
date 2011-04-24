@@ -36,6 +36,7 @@ import cherrypy
 from yotsuba.core       import base, fs
 from yotsuba.lib.kotoba import Kotoba
 
+from mako               import __version__ as mako_version
 from mako.template      import Template
 from mako.lookup        import TemplateLookup
 from mako.exceptions    import html_error_template
@@ -103,6 +104,7 @@ class ServerInterface(object):
                 largs[2] = static_routing
         else:
             print "Init:\tStatic Routing from the manual configuration"
+        print "Template: Mako Template System %s" % mako_version
         print "Server:\tRunning (press [CTRL]+[C] to stop)"
         cherrypy.quickstart(*largs, **kwargs)
         print

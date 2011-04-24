@@ -1,17 +1,19 @@
 #!/bin/sh
 # Pack an installable package
 # USAGE: build_release <version>
+SOURCE_DIR=~/Code/yotsuba
+STAGE_AREA=~/Code/yotsuba-release
+PACKAGE_ID=yotsuba-$1.tar.gz
 echo
-echo "Packing for $1"
-sudo rm -Rf build
-rm *.tar.gz *.zip
-rm -Rf ../yotsuba
-hg export ./ ../yotsuba
+echo "Staging a package for Yotsuba $1"
+cd $SOURCE_DIR
+mkdir -p $STAGE_AREA
+cp -r $SOURCE_DIR/yotsuba $SOURCE_DIR/setup.py $STAGE_AREA
+cd $STAGE_AREA
+echo "Packing for Yotsuba $1"
+tar czvf $PACKAGE_ID *
+mv $PACKAGE_ID ../
 cd ../
-cd yotsuba
-rm -Rf build doc test* *.kpf archive_doc
-ls -lh
-cd ../
-tar -czvf yotsuba-$1.tar.gz yotsuba
-rm -Rf yotsuba
+rm -Rf $STAGE_AREA
+echo "Done"
 echo
