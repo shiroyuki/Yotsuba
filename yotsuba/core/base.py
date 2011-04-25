@@ -4,7 +4,7 @@ import re
 import hashlib as h
 import logging
 
-__version__ = 4.0
+__version__ = 3.1
 REPO_TYPE = "git+hg"
 
 class logger(object):
