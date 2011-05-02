@@ -8,7 +8,7 @@
    This module is under active development. The detail is tended to change frequently.
 '''
 import re
-from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey
+from sqlalchemy import create_engine, Table, Column, Integer, String, MetaData, ForeignKey, Text
 from sqlalchemy.orm import mapper, sessionmaker, clear_mappers
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.exc import ArgumentError as SQLArgumentError
@@ -107,8 +107,10 @@ class DataStore(object):
                     
                     # Remember the configuration for the column
                     data_interface._keys[col_name] = col
+                elif 'method' in str(type(col)):
+                    continue
                 else:
-                    raise DataInterfaceMisconfigured
+                    raise DataInterfaceMisconfigured, "%s %s" % (col_name, type(col))
                 
                 columns.append(column)
             

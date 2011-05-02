@@ -218,7 +218,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
             'tools.decode.on':          support_unicode,
             'tools.encode.on':          support_unicode,
             'tools.gzip.on':            enable_compression,
-            'log.screen':               True                          # Disable trackback information
+            'log.screen':               False # Disable trackback information
         }
     }
     
@@ -348,7 +348,7 @@ def setup(configuration_filename=None, use_tori_custom_error_page=False, support
         raise WebFrameworkException("Error while reading anonymous settings for this application")
     
     try:
-        # Get the base URI
+        # Set up routing
         base_uri = xmldoc.get('base_uri').data()
         base_uri = base_uri.strip()
         base_uri = re.sub("^/", "", base_uri)
@@ -582,24 +582,23 @@ class TemplateInterface(object):
     __cache = {}
     
     def __init__(self, enable_auto_update, *directories, **options):
+        global settings
         self.__directories = directories
         self.__cache_enabled = not enable_auto_update
         
         template_params = {
             'directories':          self.__directories,
-            'filesystem_checks':    False
+            'filesystem_checks':    not settings['no_cache']
         }
         
         template_params.update(self.__default_options)
         
         if not mode == ServiceMode.GAE:
             template_params['module_directory'] = os.path.join(path['session'], 'cache', 'template')
-            template_params['filesystem_checks'] = enable_auto_update
         
         template_params.update(options)
         
         self.__engine =  TemplateLookup(**template_params)
-        self.__get = self.__engine.get_template
     
     def render(self, source, **kwargs):
         '''
@@ -622,7 +621,7 @@ class TemplateInterface(object):
         the configuration file. Currently, it doesn't fully support JavaScript
         minification. It is set to 'False' by default.
         
-        Any paarameters beside the three ones above will be treated as template context.
+        Any parameters beside the three ones above will be treated as template context.
         '''
         global base_uri
         global settings
@@ -656,7 +655,7 @@ class TemplateInterface(object):
             for directory in self.__directories:
                 if os.path.exists(os.path.join(directory, source)):
                     actual_source = os.path.join(directory, source)
-                    compiled_template = self.__get(source)
+                    compiled_template = self.__engine.get_template(source)
                     break
             
             if compiled_template:
@@ -672,7 +671,7 @@ class TemplateInterface(object):
                     raise cherrypy.HTTPError(500, "Cannot render the template from %s." % actual_source)
         
         try:
-            output = compiled_template.render(**kwargs)
+            output = compiled_template.render_unicode(**kwargs)
         except:
             raise Exception(html_error_template().render())
         
@@ -900,9 +899,10 @@ class BaseInterface(object):
         
         Example: self.default_render('shiroyuki.html', author='juti noppornpitak', direct_rendering=False)
         '''
-        response.headers['Platform'] = base.getVersion() + " (Tori %s)" % __version__
+        global template
+        response.headers['Platform'] = base.getVersion() + " / Tori %s" % __version__
         kwargs['base_uri'] = base_uri
-        return render(source, **kwargs)
+        return template.render(source, **kwargs)
     
     def respond_status(self, code, message = None, break_now = True):
         '''
