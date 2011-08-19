@@ -47,7 +47,7 @@ def test_boulevard():
         boulevard.test_basic
     )
 
-#test_kotoba()
-test_boulevard()
+test_kotoba()
+#test_boulevard()
 
 h.textBlock("Finish all tests in %.3f sec" % h.totalUsageTime)
